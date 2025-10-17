@@ -65,11 +65,30 @@ const searchVocabularies = async (searchTerm) => {
     }
 };
 
+
+const getVocabularyByMainTopic = async (mainTopic) => {
+    try {
+        return await Vocabulary.find({ main_topic: mainTopic });
+    } catch (error) {
+        throw error;
+    }
+};
+
+const getVocabularyBySubTopic = async (subTopic) => {
+    try {
+        return await Vocabulary.find({ sub_topic: subTopic });
+    } catch (error) {
+        throw error;
+    }
+};
+
 module.exports = {
     createVocabulary,
     getAllVocabularies,
     getVocabularyById,
     updateVocabulary,
     deleteVocabulary,
-    searchVocabularies
+    searchVocabularies,
+    getVocabularyByMainTopic,
+    getVocabularyBySubTopic
 };

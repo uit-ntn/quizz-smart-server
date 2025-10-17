@@ -70,4 +70,5 @@ const multipleChoiceSchema = new mongoose.Schema({
     timestamps: true
 });
 
-module.exports = mongoose.model('MultipleChoice', multipleChoiceSchema);
+// Export model with collection name matching API routes
+module.exports = mongoose.model('MultipleChoice', multipleChoiceSchema, 'multiple_choices');

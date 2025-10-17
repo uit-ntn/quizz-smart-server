@@ -52,4 +52,5 @@ const grammarSchema = new mongoose.Schema({
     timestamps: true
 });
 
-module.exports = mongoose.model('Grammar', grammarSchema);
+// Export model with collection name matching API routes
+module.exports = mongoose.model('Grammar', grammarSchema, 'grammars');

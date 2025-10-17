@@ -77,4 +77,5 @@ userSchema.methods.toJSON = function() {
     return userObject;
 };
 
-module.exports = mongoose.model('User', userSchema);
+// Export model with explicit collection name 'users'
+module.exports = mongoose.model('User', userSchema, 'users');

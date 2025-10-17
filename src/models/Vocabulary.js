@@ -49,4 +49,5 @@ const vocabularySchema = new mongoose.Schema({
     timestamps: true
 });
 
-module.exports = mongoose.model('Vocabulary', vocabularySchema);
+// Export model with collection name matching API routes
+module.exports = mongoose.model('Vocabulary', vocabularySchema, 'vocabularies');
