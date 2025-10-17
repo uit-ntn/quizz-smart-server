@@ -29,6 +29,25 @@ const getVocabularyById = async (id) => {
     }
 };
 
+// Get all vocabulary topics
+const getAllVocabularyTopics = async () => {
+    try {
+        return await Vocabulary.distinct('main_topic');
+    } catch (error) {
+        throw error;
+    }
+};
+
+
+// Get all vocabulary sub topics by main topic
+const getAllVocabularySubTopicsByMainTopic = async (mainTopic) => {
+    try {
+        return await Vocabulary.distinct('sub_topic', { main_topic: mainTopic });
+    } catch (error) {
+        throw error;
+    }
+};
+
 // Update vocabulary
 const updateVocabulary = async (id, updateData) => {
     try {
@@ -77,28 +96,6 @@ const getVocabularyByMainTopic = async (mainTopic) => {
 const getVocabularyBySubTopic = async (subTopic) => {
     try {
         return await Vocabulary.find({ sub_topic: subTopic });
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Get all vocabulary topics
-const getAllVocabularyTopics = async () => {
-    try {
-        const topics = await Vocabulary.distinct('main_topic');
-        const topicDetails = await Promise.all(
-            topics.map(async (mainTopic) => {
-                const subTopics = await Vocabulary.distinct('sub_topic', { main_topic: mainTopic });
-                const count = await Vocabulary.countDocuments({ main_topic: mainTopic });
-                return {
-                    main_topic: mainTopic,
-                    sub_topics: subTopics,
-                    total_questions: count,
-                    type: 'vocabulary'
-                };
-            })
-        );
-        return topicDetails;
     } catch (error) {
         throw error;
     }
