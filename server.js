@@ -22,13 +22,11 @@ const userRoutes = require('./src/routes/user.routes');
 const vocabularyRoutes = require('./src/routes/vocabulary.routes');
 const multipleChoiceRoutes = require('./src/routes/multipleChoice.routes');
 const grammarRoutes = require('./src/routes/grammar.routes');
-const topicRoutes = require('./src/routes/topic.routes');
 
 app.use('/api/users', userRoutes);
 app.use('/api/vocabularies', vocabularyRoutes);
 app.use('/api/multiple-choices', multipleChoiceRoutes);
 app.use('/api/grammars', grammarRoutes);
-app.use('/api/topics', topicRoutes);
 
 // MongoDB connection string
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quizzsmart';

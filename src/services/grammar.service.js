@@ -101,6 +101,28 @@ const getRandomQuestions = async (count = 10, filters = {}) => {
     }
 };
 
+// Get all grammar topics
+const getAllGrammarTopics = async () => {
+    try {
+        const topics = await Grammar.distinct('main_topic');
+        const topicDetails = await Promise.all(
+            topics.map(async (mainTopic) => {
+                const subTopics = await Grammar.distinct('sub_topic', { main_topic: mainTopic });
+                const count = await Grammar.countDocuments({ main_topic: mainTopic });
+                return {
+                    main_topic: mainTopic,
+                    sub_topics: subTopics,
+                    total_questions: count,
+                    type: 'grammar'
+                };
+            })
+        );
+        return topicDetails;
+    } catch (error) {
+        throw error;
+    }
+};
+
 module.exports = {
     createGrammar,
     getAllGrammars,
@@ -109,5 +131,6 @@ module.exports = {
     deleteGrammar,
     searchGrammars,
     getQuestionsByTopic,
-    getRandomQuestions
+    getRandomQuestions,
+    getAllGrammarTopics
 };
