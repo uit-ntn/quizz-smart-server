@@ -100,6 +100,28 @@ const getRandomQuestions = async (count = 10, filters = {}) => {
     }
 };
 
+// Get all multiple choice topics
+const getAllMultipleChoiceTopics = async () => {
+    try {
+        const topics = await MultipleChoice.distinct('main_topic');
+        const topicDetails = await Promise.all(
+            topics.map(async (mainTopic) => {
+                const subTopics = await MultipleChoice.distinct('sub_topic', { main_topic: mainTopic });
+                const count = await MultipleChoice.countDocuments({ main_topic: mainTopic });
+                return {
+                    main_topic: mainTopic,
+                    sub_topics: subTopics,
+                    total_questions: count,
+                    type: 'multiple-choice'
+                };
+            })
+        );
+        return topicDetails;
+    } catch (error) {
+        throw error;
+    }
+};
+
 module.exports = {
     createMultipleChoice,
     getAllMultipleChoices,
@@ -108,5 +130,6 @@ module.exports = {
     deleteMultipleChoice,
     searchMultipleChoices,
     getQuestionsByTopic,
-    getRandomQuestions
+    getRandomQuestions,
+    getAllMultipleChoiceTopics
 };

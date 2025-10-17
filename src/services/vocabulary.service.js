@@ -82,6 +82,28 @@ const getVocabularyBySubTopic = async (subTopic) => {
     }
 };
 
+// Get all vocabulary topics
+const getAllVocabularyTopics = async () => {
+    try {
+        const topics = await Vocabulary.distinct('main_topic');
+        const topicDetails = await Promise.all(
+            topics.map(async (mainTopic) => {
+                const subTopics = await Vocabulary.distinct('sub_topic', { main_topic: mainTopic });
+                const count = await Vocabulary.countDocuments({ main_topic: mainTopic });
+                return {
+                    main_topic: mainTopic,
+                    sub_topics: subTopics,
+                    total_questions: count,
+                    type: 'vocabulary'
+                };
+            })
+        );
+        return topicDetails;
+    } catch (error) {
+        throw error;
+    }
+};
+
 module.exports = {
     createVocabulary,
     getAllVocabularies,
@@ -90,5 +112,6 @@ module.exports = {
     deleteVocabulary,
     searchVocabularies,
     getVocabularyByMainTopic,
-    getVocabularyBySubTopic
+    getVocabularyBySubTopic,
+    getAllVocabularyTopics
 };
