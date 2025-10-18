@@ -1,31 +1,41 @@
 const mongoose = require('mongoose');
 
-const vocabularySchema = new mongoose.Schema({
-    test_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Test',
-        required: false // optional: nếu không thuộc test nào
-    },
-    word: {
+const testSchema = new mongoose.Schema({
+    test_title: {
         type: String,
         required: true
     },
-    meaning: {
+    description: {
         type: String,
         required: true
     },
-    example_sentence: {
+    main_topic: {
         type: String,
         required: true
+    },
+    sub_topic: {
+        type: String,
+        required: true
+    },
+    test_type: {
+        type: String,
+        required: true,
+        enum: ['multiple_choice', 'grammar', 'vocabulary', 'spelling', 'listening']
+    },
+    total_questions: {
+        type: Number,
+        required: true,
+        default: 0
+    },
+    time_limit_minutes: {
+        type: Number,
+        required: false
     },
     difficulty: {
         type: String,
         enum: ['easy', 'medium', 'hard'],
         default: 'medium'
     },
-    tags: [{
-        type: String
-    }],
     status: {
         type: String,
         enum: ['active', 'draft', 'archived'],
@@ -45,4 +55,4 @@ const vocabularySchema = new mongoose.Schema({
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
 });
 
-module.exports = mongoose.model('Vocabulary', vocabularySchema, 'vocabularies');
+module.exports = mongoose.model('Test', testSchema, 'tests');

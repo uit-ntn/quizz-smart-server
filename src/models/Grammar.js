@@ -1,27 +1,32 @@
 const mongoose = require('mongoose');
 
 const grammarSchema = new mongoose.Schema({
-    main_topic: {
-        type: String,
-        required: true
-    },
-    sub_topic: {
-        type: String,
-        required: true
+    test_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Test',
+        required: false // optional: nếu không thuộc test nào
     },
     question_text: {
         type: String,
         required: true
     },
+    task_instruction: {
+        type: String,
+        required: false
+    },
+    blanks: {
+        type: Number,
+        required: false
+    },
     correct_answers: [{
         type: String,
         required: true
     }],
-    explanation_text: {
+    answer_pattern: {
         type: String,
-        required: true
+        required: false
     },
-    example_sentence: {
+    explanation_text: {
         type: String,
         required: true
     },
@@ -35,7 +40,7 @@ const grammarSchema = new mongoose.Schema({
     }],
     status: {
         type: String,
-        enum: ['active', 'inactive', 'draft'],
+        enum: ['active', 'draft', 'archived'],
         default: 'active'
     },
     created_by: {
@@ -49,8 +54,7 @@ const grammarSchema = new mongoose.Schema({
         required: true
     }
 }, {
-    timestamps: true
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
 });
 
-// Export model with collection name matching API routes
 module.exports = mongoose.model('Grammar', grammarSchema, 'grammars');

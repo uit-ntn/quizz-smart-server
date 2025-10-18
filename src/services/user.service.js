@@ -1,140 +1,118 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-
-// Generate JWT token
-const generateToken = (userId) => {
-    return jwt.sign(
-        { userId }, 
-        process.env.JWT_SECRET || 'your-secret-key',
-        { expiresIn: '7d' }
-    );
-};
 
 // Register new user
 const register = async (userData) => {
-    try {
-        const user = new User(userData);
-        await user.save();
-        const token = generateToken(user._id);
-        return { user, token };
-    } catch (error) {
-        throw error;
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: userData.email });
+    if (existingUser) {
+        throw new Error('User already exists');
     }
+
+    const user = new User(userData);
+    await user.save();
+    
+    // Generate JWT token
+    const token = jwt.sign(
+        { userId: user._id, role: user.role },
+        process.env.JWT_SECRET || 'Nhan123456',
+        { expiresIn: '7d' }
+    );
+
+    return { user, token };
 };
 
 // Login user
 const login = async (email, password) => {
-    try {
-        const user = await User.findOne({ email, status: 'active' });
-        if (!user) {
-            throw new Error('Invalid credentials');
-        }
-
-        const isMatch = await user.comparePassword(password);
-        if (!isMatch) {
-            throw new Error('Invalid credentials');
-        }
-
-        const token = generateToken(user._id);
-        return { user, token };
-    } catch (error) {
-        throw error;
+    const user = await User.findOne({ email });
+    if (!user) {
+        throw new Error('Invalid credentials');
     }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+        throw new Error('Invalid credentials');
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+        { userId: user._id, role: user.role },
+        process.env.JWT_SECRET || 'Nhan123456',
+        { expiresIn: '7d' }
+    );
+
+    return { user, token };
 };
 
 // Get all users
 const getAllUsers = async (filters = {}) => {
-    try {
-        const query = { ...filters };
-        return await User.find(query);
-    } catch (error) {
-        throw error;
-    }
+    const query = { ...filters };
+    return await User.find(query).select('-password');
 };
 
 // Get user by ID
 const getUserById = async (id) => {
-    try {
-        return await User.findById(id);
-    } catch (error) {
-        throw error;
-    }
+    return await User.findById(id).select('-password');
 };
 
 // Update user
 const updateUser = async (id, updateData) => {
-    try {
-        // Don't allow password update through this method
-        delete updateData.password_hash;
-        
-        return await User.findByIdAndUpdate(
-            id,
-            updateData,
-            { new: true }
-        );
-    } catch (error) {
-        throw error;
-    }
+    // Don't allow password update through this method
+    delete updateData.password;
+    
+    return await User.findByIdAndUpdate(
+        id,
+        updateData,
+        { new: true }
+    ).select('-password');
 };
 
-// Change password
-const changePassword = async (id, currentPassword, newPassword) => {
-    try {
-        const user = await User.findById(id);
-        if (!user) {
-            throw new Error('User not found');
-        }
-
-        const isMatch = await user.comparePassword(currentPassword);
-        if (!isMatch) {
-            throw new Error('Current password is incorrect');
-        }
-
-        user.password_hash = newPassword;
-        await user.save();
-        return user;
-    } catch (error) {
-        throw error;
+// Update password
+const updatePassword = async (id, oldPassword, newPassword) => {
+    const user = await User.findById(id);
+    if (!user) {
+        throw new Error('User not found');
     }
+
+    const isMatch = await user.comparePassword(oldPassword);
+    if (!isMatch) {
+        throw new Error('Current password is incorrect');
+    }
+
+    user.password = newPassword;
+    await user.save();
+    
+    return { message: 'Password updated successfully' };
 };
 
-// Delete user (soft delete by changing status)
+// Delete user
 const deleteUser = async (id) => {
-    try {
-        return await User.findByIdAndUpdate(
-            id,
-            { status: 'inactive' },
-            { new: true }
-        );
-    } catch (error) {
-        throw error;
-    }
+    return await User.findByIdAndDelete(id);
 };
 
 // Search users
 const searchUsers = async (searchTerm) => {
-    try {
-        return await User.find({
-            $or: [
-                { username: { $regex: searchTerm, $options: 'i' } },
-                { full_name: { $regex: searchTerm, $options: 'i' } },
-                { email: { $regex: searchTerm, $options: 'i' } }
-            ]
-        });
-    } catch (error) {
-        throw error;
-    }
+    return await User.find({
+        $or: [
+            { full_name: { $regex: searchTerm, $options: 'i' } },
+            { email: { $regex: searchTerm, $options: 'i' } }
+        ]
+    }).select('-password');
+};
+
+// Get user profile
+const getUserProfile = async (id) => {
+    return await User.findById(id).select('-password');
 };
 
 module.exports = {
-    generateToken,
     register,
     login,
     getAllUsers,
     getUserById,
     updateUser,
-    changePassword,
+    updatePassword,
     deleteUser,
-    searchUsers
+    searchUsers,
+    getUserProfile
 };

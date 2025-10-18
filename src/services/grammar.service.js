@@ -123,6 +123,28 @@ const getAllGrammarTopics = async () => {
     }
 };
 
+// Get all sub topics
+const getAllSubTopics = async () => {
+  return Grammar.distinct('sub_topic');
+};
+
+// Get sub topics by main topic
+const getSubTopicsByMainTopic = async (mainTopic) => {
+  return Grammar.distinct('sub_topic', { main_topic: mainTopic });
+};
+
+// Get all sub topics, grouped and sorted by main_topic
+const getAllGroupedSubTopics = async () => {
+    const mainTopics = await Grammar.distinct('main_topic');
+    const sortedMainTopics = mainTopics.sort();
+    const result = {};
+    for (let mainTopic of sortedMainTopics) {
+        let subTopics = await Grammar.distinct('sub_topic', { main_topic: mainTopic });
+        result[mainTopic] = subTopics.sort();
+    }
+    return result;
+};
+
 module.exports = {
     createGrammar,
     getAllGrammars,
@@ -132,5 +154,8 @@ module.exports = {
     searchGrammars,
     getQuestionsByTopic,
     getRandomQuestions,
-    getAllGrammarTopics
+    getAllGrammarTopics,
+    getAllSubTopics,
+    getSubTopicsByMainTopic,
+    getAllGroupedSubTopics
 };

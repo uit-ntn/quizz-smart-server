@@ -19,18 +19,27 @@ const explanationSchema = new mongoose.Schema({
     },
     incorrect_choices: {
         type: Map,
-        of: String
+        of: String,
+        validate: {
+            validator: function(v) {
+                const validLabels = ['A', 'B', 'C', 'D', 'E'];
+                for (let key of v.keys()) {
+                    if (!validLabels.includes(key)) {
+                        return false;
+                    }
+                }
+                return true;
+            },
+            message: 'Invalid option label in incorrect_choices. Must be A, B, C, D, or E.'
+        }
     }
 }, { _id: false });
 
 const multipleChoiceSchema = new mongoose.Schema({
-    main_topic: {
-        type: String,
-        required: true
-    },
-    sub_topic: {
-        type: String,
-        required: true
+    test_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Test',
+        required: false // optional: nếu không thuộc test nào
     },
     question_text: {
         type: String,
@@ -53,7 +62,7 @@ const multipleChoiceSchema = new mongoose.Schema({
     }],
     status: {
         type: String,
-        enum: ['active', 'inactive', 'draft'],
+        enum: ['active', 'draft', 'archived'],
         default: 'active'
     },
     created_by: {
@@ -67,8 +76,7 @@ const multipleChoiceSchema = new mongoose.Schema({
         required: true
     }
 }, {
-    timestamps: true
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
 });
 
-// Export model with collection name matching API routes
 module.exports = mongoose.model('MultipleChoice', multipleChoiceSchema, 'multiple_choices');

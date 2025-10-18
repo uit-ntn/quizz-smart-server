@@ -2,20 +2,6 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-    username: {
-        type: String,
-        required: true,
-        unique: true,
-        trim: true,
-        minlength: 3,
-        maxlength: 30
-    },
-    full_name: {
-        type: String,
-        required: true,
-        trim: true,
-        maxlength: 100
-    },
     email: {
         type: String,
         required: true,
@@ -24,41 +10,33 @@ const userSchema = new mongoose.Schema({
         lowercase: true,
         match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please fill a valid email address']
     },
-    password_hash: {
+    password: {
         type: String,
         required: true,
         minlength: 6
     },
     role: {
         type: String,
-        enum: ['admin', 'teacher', 'student'],
-        default: 'student'
+        enum: ['admin', 'user'],
+        default: 'user'
     },
-    avatar_url: {
+    full_name: {
         type: String,
-        default: ''
-    },
-    bio: {
-        type: String,
-        default: '',
-        maxlength: 500
-    },
-    status: {
-        type: String,
-        enum: ['active', 'inactive', 'suspended'],
-        default: 'active'
+        required: true,
+        trim: true,
+        maxlength: 100
     }
 }, {
-    timestamps: true
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
 });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
-    if (!this.isModified('password_hash')) return next();
+    if (!this.isModified('password')) return next();
     
     try {
         const salt = await bcrypt.genSalt(10);
-        this.password_hash = await bcrypt.hash(this.password_hash, salt);
+        this.password = await bcrypt.hash(this.password, salt);
         next();
     } catch (error) {
         next(error);
@@ -67,15 +45,14 @@ userSchema.pre('save', async function(next) {
 
 // Compare password method
 userSchema.methods.comparePassword = async function(candidatePassword) {
-    return bcrypt.compare(candidatePassword, this.password_hash);
+    return bcrypt.compare(candidatePassword, this.password);
 };
 
 // Don't return password in JSON
 userSchema.methods.toJSON = function() {
     const userObject = this.toObject();
-    delete userObject.password_hash;
+    delete userObject.password;
     return userObject;
 };
 
-// Export model with explicit collection name 'users'
 module.exports = mongoose.model('User', userSchema, 'users');

@@ -19,11 +19,15 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 
 // Routes
 const userRoutes = require('./src/routes/user.routes');
+const testRoutes = require('./src/routes/test.routes');
+const testResultRoutes = require('./src/routes/testResult.routes');
 const vocabularyRoutes = require('./src/routes/vocabulary.routes');
 const multipleChoiceRoutes = require('./src/routes/multipleChoice.routes');
 const grammarRoutes = require('./src/routes/grammar.routes');
 
 app.use('/api/users', userRoutes);
+app.use('/api/tests', testRoutes);
+app.use('/api/test-results', testResultRoutes);
 app.use('/api/vocabularies', vocabularyRoutes);
 app.use('/api/multiple-choices', multipleChoiceRoutes);
 app.use('/api/grammars', grammarRoutes);

@@ -122,6 +122,28 @@ const getAllMultipleChoiceTopics = async () => {
     }
 };
 
+// Get all main topics
+const getAllMainTopics = async () => {
+    return await MultipleChoice.distinct('main_topic');
+};
+
+// Get all sub topics by main topic
+const getSubTopicsByMainTopic = async (mainTopic) => {
+    return await MultipleChoice.distinct('sub_topic', { main_topic: mainTopic });
+};
+
+// Get all sub topics, grouped and sorted by main_topic
+const getAllGroupedSubTopics = async () => {
+    const mainTopics = await MultipleChoice.distinct('main_topic');
+    const sortedMainTopics = mainTopics.sort();
+    const result = {};
+    for (let mainTopic of sortedMainTopics) {
+        let subTopics = await MultipleChoice.distinct('sub_topic', { main_topic: mainTopic });
+        result[mainTopic] = subTopics.sort();
+    }
+    return result;
+};
+
 module.exports = {
     createMultipleChoice,
     getAllMultipleChoices,
@@ -131,5 +153,8 @@ module.exports = {
     searchMultipleChoices,
     getQuestionsByTopic,
     getRandomQuestions,
-    getAllMultipleChoiceTopics
+    getAllMultipleChoiceTopics,
+    getAllMainTopics,
+    getSubTopicsByMainTopic,
+    getAllGroupedSubTopics
 };

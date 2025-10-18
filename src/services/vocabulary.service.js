@@ -14,7 +14,9 @@ const createVocabulary = async (vocabularyData) => {
 const getAllVocabularies = async (filters = {}) => {
     try {
         const query = { ...filters };
-        return await Vocabulary.find(query);
+        return await Vocabulary.find(query)
+            .populate('created_by', 'username full_name')
+            .populate('updated_by', 'username full_name');
     } catch (error) {
         throw error;
     }
@@ -23,7 +25,9 @@ const getAllVocabularies = async (filters = {}) => {
 // Get vocabulary by ID
 const getVocabularyById = async (id) => {
     try {
-        return await Vocabulary.findById(id);
+        return await Vocabulary.findById(id)
+            .populate('created_by', 'username full_name')
+            .populate('updated_by', 'username full_name');
     } catch (error) {
         throw error;
     }
@@ -36,7 +40,8 @@ const updateVocabulary = async (id, updateData) => {
             id,
             { ...updateData, updated_at: new Date() },
             { new: true }
-        );
+        ).populate('created_by', 'username full_name')
+         .populate('updated_by', 'username full_name');
     } catch (error) {
         throw error;
     }
@@ -59,7 +64,8 @@ const searchVocabularies = async (searchTerm) => {
                 { word: { $regex: searchTerm, $options: 'i' } },
                 { meaning: { $regex: searchTerm, $options: 'i' } }
             ]
-        });
+        }).populate('created_by', 'username full_name')
+         .populate('updated_by', 'username full_name');
     } catch (error) {
         throw error;
     }
@@ -68,7 +74,9 @@ const searchVocabularies = async (searchTerm) => {
 
 const getVocabularyByMainTopic = async (mainTopic) => {
     try {
-        return await Vocabulary.find({ main_topic: mainTopic });
+        return await Vocabulary.find({ main_topic: mainTopic })
+            .populate('created_by', 'username full_name')
+            .populate('updated_by', 'username full_name');
     } catch (error) {
         throw error;
     }
@@ -76,7 +84,9 @@ const getVocabularyByMainTopic = async (mainTopic) => {
 
 const getVocabularyBySubTopic = async (subTopic) => {
     try {
-        return await Vocabulary.find({ sub_topic: subTopic });
+        return await Vocabulary.find({ sub_topic: subTopic })
+            .populate('created_by', 'username full_name')
+            .populate('updated_by', 'username full_name');
     } catch (error) {
         throw error;
     }
@@ -104,6 +114,28 @@ const getAllVocabularyTopics = async () => {
     }
 };
 
+// Get all sub topics
+const getAllSubTopics = async () => {
+  return Vocabulary.distinct('sub_topic');
+};
+
+// Get sub topics by main topic
+const getSubTopicsByMainTopic = async (mainTopic) => {
+  return Vocabulary.distinct('sub_topic', { main_topic: mainTopic });
+};
+
+// Get all sub topics, grouped and sorted by main_topic
+const getAllGroupedSubTopics = async () => {
+    const mainTopics = await Vocabulary.distinct('main_topic');
+    const sortedMainTopics = mainTopics.sort();
+    const result = {};
+    for (let mainTopic of sortedMainTopics) {
+        let subTopics = await Vocabulary.distinct('sub_topic', { main_topic: mainTopic });
+        result[mainTopic] = subTopics.sort();
+    }
+    return result;
+};
+
 module.exports = {
     createVocabulary,
     getAllVocabularies,
@@ -113,5 +145,8 @@ module.exports = {
     searchVocabularies,
     getVocabularyByMainTopic,
     getVocabularyBySubTopic,
-    getAllVocabularyTopics
+    getAllVocabularyTopics,
+    getAllSubTopics,
+    getSubTopicsByMainTopic,
+    getAllGroupedSubTopics
 };

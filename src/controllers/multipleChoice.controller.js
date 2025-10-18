@@ -115,6 +115,36 @@ const getRandomQuestions = async (req, res) => {
     }
 };
 
+// Get all main topics
+const getAllMainTopics = async (req, res) => {
+    try {
+        const topics = await multipleChoiceService.getAllMainTopics();
+        res.json({ main_topics: topics });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Get all sub topics by main topic
+const getSubTopicsByMainTopic = async (req, res) => {
+    try {
+        const mainTopic = req.params.main_topic;
+        const subTopics = await multipleChoiceService.getSubTopicsByMainTopic(mainTopic);
+        res.json({ sub_topics: subTopics });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const getAllGroupedSubTopics = async (req, res) => {
+    try {
+        const grouped = await multipleChoiceService.getAllGroupedSubTopics();
+        res.json(grouped);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     createMultipleChoice,
     getAllMultipleChoices,
@@ -123,5 +153,8 @@ module.exports = {
     deleteMultipleChoice,
     searchMultipleChoices,
     getQuestionsByTopic,
-    getRandomQuestions
+    getRandomQuestions,
+    getAllMainTopics,
+    getSubTopicsByMainTopic,
+    getAllGroupedSubTopics
 };

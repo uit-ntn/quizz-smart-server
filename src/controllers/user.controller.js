@@ -6,11 +6,7 @@ const register = async (req, res) => {
         const { user, token } = await userService.register(req.body);
         res.status(201).json({ user, token });
     } catch (error) {
-        if (error.code === 11000) {
-            res.status(400).json({ message: 'Username or email already exists' });
-        } else {
-            res.status(400).json({ message: error.message });
-        }
+        res.status(400).json({ message: error.message });
     }
 };
 
@@ -25,21 +21,11 @@ const login = async (req, res) => {
     }
 };
 
-// Get current user profile
-const getProfile = async (req, res) => {
-    try {
-        res.json(req.user);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
 // Get all users (admin only)
 const getAllUsers = async (req, res) => {
     try {
         const filters = {};
         if (req.query.role) filters.role = req.query.role;
-        if (req.query.status) filters.status = req.query.status;
 
         const users = await userService.getAllUsers(filters);
         res.json(users);
@@ -61,6 +47,16 @@ const getUserById = async (req, res) => {
     }
 };
 
+// Get current user profile
+const getProfile = async (req, res) => {
+    try {
+        const user = await userService.getUserProfile(req.user._id);
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // Update user
 const updateUser = async (req, res) => {
     try {
@@ -74,7 +70,7 @@ const updateUser = async (req, res) => {
     }
 };
 
-// Update own profile
+// Update current user profile
 const updateProfile = async (req, res) => {
     try {
         const user = await userService.updateUser(req.user._id, req.body);
@@ -84,18 +80,18 @@ const updateProfile = async (req, res) => {
     }
 };
 
-// Change password
-const changePassword = async (req, res) => {
+// Update password
+const updatePassword = async (req, res) => {
     try {
-        const { currentPassword, newPassword } = req.body;
-        await userService.changePassword(req.user._id, currentPassword, newPassword);
-        res.json({ message: 'Password changed successfully' });
+        const { oldPassword, newPassword } = req.body;
+        const result = await userService.updatePassword(req.user._id, oldPassword, newPassword);
+        res.json(result);
     } catch (error) {
         res.status(400).json({ message: error.message });
     }
 };
 
-// Delete user (admin only)
+// Delete user
 const deleteUser = async (req, res) => {
     try {
         const user = await userService.deleteUser(req.params.id);
@@ -125,12 +121,12 @@ const searchUsers = async (req, res) => {
 module.exports = {
     register,
     login,
-    getProfile,
     getAllUsers,
     getUserById,
+    getProfile,
     updateUser,
     updateProfile,
-    changePassword,
+    updatePassword,
     deleteUser,
     searchUsers
 };

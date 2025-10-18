@@ -88,11 +88,45 @@ const searchVocabularies = async (req, res) => {
     }
 };
 
+// Get all sub topics
+const getAllSubTopics = async (req, res) => {
+    try {
+        const result = await vocabularyService.getAllSubTopics();
+        res.json({ sub_topics: result });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Get sub topics by main topic
+const getSubTopicsByMainTopic = async (req, res) => {
+    try {
+        const mainTopic = req.params.main_topic;
+        const result = await vocabularyService.getSubTopicsByMainTopic(mainTopic);
+        res.json({ sub_topics: result });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Get all sub topics grouped by main topic
+const getAllGroupedSubTopics = async (req, res) => {
+    try {
+        const grouped = await vocabularyService.getAllGroupedSubTopics();
+        res.json(grouped);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     createVocabulary,
     getAllVocabularies,
     getVocabularyById,
     updateVocabulary,
     deleteVocabulary,
-    searchVocabularies
+    searchVocabularies,
+    getAllSubTopics,
+    getSubTopicsByMainTopic,
+    getAllGroupedSubTopics
 };
