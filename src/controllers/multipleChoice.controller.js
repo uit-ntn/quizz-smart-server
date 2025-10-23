@@ -75,40 +75,10 @@ const deleteMultipleChoice = async (req, res) => {
     }
 };
 
-// Search multiple choice questions
-const searchMultipleChoices = async (req, res) => {
+// Get all multiple choice questions by test ID
+const getAllMultipleChoicesByTestId = async (req, res) => {
     try {
-        const { q } = req.query;
-        if (!q) {
-            return res.status(400).json({ message: 'Search term is required' });
-        }
-        const questions = await multipleChoiceService.searchMultipleChoices(q);
-        res.json(questions);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-// Get questions by topic
-const getQuestionsByTopic = async (req, res) => {
-    try {
-        const { mainTopic, subTopic } = req.params;
-        const questions = await multipleChoiceService.getQuestionsByTopic(mainTopic, subTopic);
-        res.json(questions);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-// Get random questions for quiz
-const getRandomQuestions = async (req, res) => {
-    try {
-        const count = parseInt(req.query.count) || 10;
-        const filters = {};
-        if (req.query.difficulty) filters.difficulty = req.query.difficulty;
-        if (req.query.main_topic) filters.main_topic = req.query.main_topic;
-
-        const questions = await multipleChoiceService.getRandomQuestions(count, filters);
+        const questions = await multipleChoiceService.getAllMultipleChoicesByTestId(req.params.testId);
         res.json(questions);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -116,30 +86,21 @@ const getRandomQuestions = async (req, res) => {
 };
 
 // Get all main topics
-const getAllMainTopics = async (req, res) => {
+const getAllMultipleChoicesMainTopics = async (req, res) => {
     try {
-        const topics = await multipleChoiceService.getAllMainTopics();
-        res.json({ main_topics: topics });
+        const mainTopics = await multipleChoiceService.getAllMultipleChoicesMainTopics();
+        res.json(mainTopics);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
 
 // Get all sub topics by main topic
-const getSubTopicsByMainTopic = async (req, res) => {
+const getAllMultipleChoicesSubTopicsByMainTopic = async (req, res) => {
     try {
-        const mainTopic = req.params.main_topic;
-        const subTopics = await multipleChoiceService.getSubTopicsByMainTopic(mainTopic);
-        res.json({ sub_topics: subTopics });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-const getAllGroupedSubTopics = async (req, res) => {
-    try {
-        const grouped = await multipleChoiceService.getAllGroupedSubTopics();
-        res.json(grouped);
+        const { mainTopic } = req.params;
+        const subTopics = await multipleChoiceService.getAllMultipleChoicesSubTopicsByMainTopic(mainTopic);
+        res.json(subTopics);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -151,10 +112,7 @@ module.exports = {
     getMultipleChoiceById,
     updateMultipleChoice,
     deleteMultipleChoice,
-    searchMultipleChoices,
-    getQuestionsByTopic,
-    getRandomQuestions,
-    getAllMainTopics,
-    getSubTopicsByMainTopic,
-    getAllGroupedSubTopics
+    getAllMultipleChoicesByTestId,
+    getAllMultipleChoicesMainTopics,
+    getAllMultipleChoicesSubTopicsByMainTopic
 };

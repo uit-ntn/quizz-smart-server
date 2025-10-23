@@ -27,6 +27,12 @@ const getAllTestResults = async (req, res) => {
     }
 };
 
+const getAllTestResultsByUserId= async (req, res) => {
+    return await TestResult.find({ user_id: userId })
+        .populate('test_id', 'test_title main_topic sub_topic')
+        .sort({ created_at: -1 });
+};
+
 // Get test result by ID
 const getTestResultById = async (req, res) => {
     try {
@@ -107,5 +113,6 @@ module.exports = {
     getTestResultsByTest,
     getMyStatistics,
     getUserStatistics,
-    deleteTestResult
+    deleteTestResult,
+    getAllTestResultsByUserId
 };

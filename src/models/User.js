@@ -12,8 +12,20 @@ const userSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        required: true,
+        required: function() {
+            return !this.googleId; // Password required only if not using Google auth
+        },
         minlength: 6
+    },
+    googleId: {
+        type: String,
+        unique: true,
+        sparse: true // Allows multiple documents to have null/undefined googleId
+    },
+    authProvider: {
+        type: String,
+        enum: ['local', 'google'],
+        default: 'local'
     },
     role: {
         type: String,
@@ -25,14 +37,18 @@ const userSchema = new mongoose.Schema({
         required: true,
         trim: true,
         maxlength: 100
+    },
+    avatar_url: {
+        type: String,
+        default: null
     }
 }, {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
 });
 
-// Hash password before saving
+// Hash password before saving (only for local auth)
 userSchema.pre('save', async function(next) {
-    if (!this.isModified('password')) return next();
+    if (!this.isModified('password') || !this.password) return next();
     
     try {
         const salt = await bcrypt.genSalt(10);

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Test = require('../models/Test');
 
 // Create new test
@@ -14,6 +15,23 @@ const getAllTests = async (filters = {}) => {
         .populate('updated_by', 'email full_name');
 };
 
+const getAllMultipleChoicesTests = async () => {
+    return await Test.find({ test_type: 'multiple_choice' })
+        .populate('created_by', 'email full_name')
+        .populate('updated_by', 'email full_name');
+};
+
+const getAllGrammarsTests = async () => {
+    return await Test.find({ test_type: 'grammar' })
+        .populate('created_by', 'email full_name')
+        .populate('updated_by', 'email full_name');
+};
+
+const getAllVocabulariesTests = async () => {
+    return await Test.find({ test_type: 'vocabulary' })
+        .populate('created_by', 'email full_name')
+        .populate('updated_by', 'email full_name');
+};
 // Get test by ID
 const getTestById = async (id) => {
     return await Test.findById(id)
@@ -28,7 +46,7 @@ const updateTest = async (id, updateData) => {
         { ...updateData },
         { new: true }
     ).populate('created_by', 'email full_name')
-     .populate('updated_by', 'email full_name');
+        .populate('updated_by', 'email full_name');
 };
 
 // Delete test
@@ -46,7 +64,7 @@ const searchTests = async (searchTerm) => {
             { sub_topic: { $regex: searchTerm, $options: 'i' } }
         ]
     }).populate('created_by', 'email full_name')
-     .populate('updated_by', 'email full_name');
+        .populate('updated_by', 'email full_name');
 };
 
 // Get tests by topic
@@ -67,13 +85,60 @@ const getTestsByType = async (testType) => {
         .populate('updated_by', 'email full_name');
 };
 
+// Get all multiple choice main topics
+const getAllMultipleChoicesMainTopics = async () => {
+    return await Test.distinct('main_topic', { test_type: 'multiple_choice' });
+};
+
+// Get all multiple choice sub topics by main topic
+const getAllMultipleChoicesSubTopicsByMainTopic = async (mainTopic) => {
+    const subTopics = await Test.distinct('sub_topic', {
+        test_type: 'multiple_choice',
+        main_topic: { $regex: new RegExp(mainTopic, 'i') }
+    });
+    return subTopics;
+};
+
+const getAllGrammarsMainTopics = async () => {
+    return await Test.distinct('main_topic', { test_type: 'grammar' });
+};
+
+const getAllGrammarsSubTopicsByMainTopic = async (mainTopic) => {
+    const subTopics = await Test.distinct('sub_topic', {
+        test_type: 'grammar',
+        main_topic: { $regex: new RegExp(mainTopic, 'i') }
+    });
+    return subTopics;
+};
+
+const getAllVocabulariesMainTopics = async () => {
+    return await Test.distinct('main_topic', { test_type: 'vocabulary' });
+};
+
+const getAllVocabulariesSubTopicsByMainTopic = async (mainTopic) => {
+    const subTopics = await Test.distinct('sub_topic', {
+        test_type: 'vocabulary',
+        main_topic: { $regex: new RegExp(mainTopic, 'i') }
+    });
+    return subTopics;
+};
+
 module.exports = {
     createTest,
     getAllTests,
+    getAllMultipleChoicesTests,
+    getAllGrammarsTests,
+    getAllVocabulariesTests,
     getTestById,
     updateTest,
     deleteTest,
     searchTests,
     getTestsByTopic,
-    getTestsByType
+    getTestsByType,
+    getAllMultipleChoicesMainTopics,
+    getAllMultipleChoicesSubTopicsByMainTopic,
+    getAllGrammarsMainTopics,
+    getAllGrammarsSubTopicsByMainTopic,
+    getAllVocabulariesMainTopics,
+    getAllVocabulariesSubTopicsByMainTopic
 };

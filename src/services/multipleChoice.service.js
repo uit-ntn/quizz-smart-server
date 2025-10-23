@@ -1,4 +1,5 @@
 const MultipleChoice = require('../models/MultipleChoice');
+const mongoose = require('mongoose');
 
 // Create new multiple choice question
 const createMultipleChoice = async (questionData) => {
@@ -13,21 +14,30 @@ const createMultipleChoice = async (questionData) => {
 // Get all multiple choice questions with optional filters
 const getAllMultipleChoices = async (filters = {}) => {
     try {
-        const query = { ...filters };
-        return await MultipleChoice.find(query)
-            .populate('created_by', 'username full_name')
-            .populate('updated_by', 'username full_name');
+        return await MultipleChoice.find(filters);
     } catch (error) {
         throw error;
     }
+};
+
+// Get all multiple choice main topics
+const getAllMultipleChoicesMainTopics = async () => {
+    return await MultipleChoice.distinct('main_topic');
+};
+
+// Get all multiple choice sub topics
+const getAllMultipleChoicesSubTopicsByMainTopic = async (mainTopic) => {
+    return await MultipleChoice.distinct('sub_topic', { main_topic: mainTopic });
+};
+
+const getAllMultipleChoicesByTestId = async (testId) => {
+    return await MultipleChoice.find({ test_id: new mongoose.Types.ObjectId(testId) });
 };
 
 // Get multiple choice question by ID
 const getMultipleChoiceById = async (id) => {
     try {
         return await MultipleChoice.findById(id)
-            .populate('created_by', 'username full_name')
-            .populate('updated_by', 'username full_name');
     } catch (error) {
         throw error;
     }
@@ -40,8 +50,7 @@ const updateMultipleChoice = async (id, updateData) => {
             id,
             { ...updateData, updated_at: new Date() },
             { new: true }
-        ).populate('created_by', 'username full_name')
-         .populate('updated_by', 'username full_name');
+        )
     } catch (error) {
         throw error;
     }
@@ -56,105 +65,11 @@ const deleteMultipleChoice = async (id) => {
     }
 };
 
-// Search multiple choice questions
-const searchMultipleChoices = async (searchTerm) => {
-    try {
-        return await MultipleChoice.find({
-            $or: [
-                { question_text: { $regex: searchTerm, $options: 'i' } },
-                { main_topic: { $regex: searchTerm, $options: 'i' } },
-                { sub_topic: { $regex: searchTerm, $options: 'i' } }
-            ]
-        }).populate('created_by', 'username full_name')
-         .populate('updated_by', 'username full_name');
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Get questions by topic
-const getQuestionsByTopic = async (mainTopic, subTopic = null) => {
-    try {
-        const query = { main_topic: mainTopic };
-        if (subTopic) {
-            query.sub_topic = subTopic;
-        }
-        return await MultipleChoice.find(query)
-            .populate('created_by', 'username full_name')
-            .populate('updated_by', 'username full_name');
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Get random questions for quiz
-const getRandomQuestions = async (count = 10, filters = {}) => {
-    try {
-        const questions = await MultipleChoice.aggregate([
-            { $match: { status: 'active', ...filters } },
-            { $sample: { size: count } }
-        ]);
-        return questions;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Get all multiple choice topics
-const getAllMultipleChoiceTopics = async () => {
-    try {
-        const topics = await MultipleChoice.distinct('main_topic');
-        const topicDetails = await Promise.all(
-            topics.map(async (mainTopic) => {
-                const subTopics = await MultipleChoice.distinct('sub_topic', { main_topic: mainTopic });
-                const count = await MultipleChoice.countDocuments({ main_topic: mainTopic });
-                return {
-                    main_topic: mainTopic,
-                    sub_topics: subTopics,
-                    total_questions: count,
-                    type: 'multiple-choice'
-                };
-            })
-        );
-        return topicDetails;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Get all main topics
-const getAllMainTopics = async () => {
-    return await MultipleChoice.distinct('main_topic');
-};
-
-// Get all sub topics by main topic
-const getSubTopicsByMainTopic = async (mainTopic) => {
-    return await MultipleChoice.distinct('sub_topic', { main_topic: mainTopic });
-};
-
-// Get all sub topics, grouped and sorted by main_topic
-const getAllGroupedSubTopics = async () => {
-    const mainTopics = await MultipleChoice.distinct('main_topic');
-    const sortedMainTopics = mainTopics.sort();
-    const result = {};
-    for (let mainTopic of sortedMainTopics) {
-        let subTopics = await MultipleChoice.distinct('sub_topic', { main_topic: mainTopic });
-        result[mainTopic] = subTopics.sort();
-    }
-    return result;
-};
-
 module.exports = {
     createMultipleChoice,
     getAllMultipleChoices,
     getMultipleChoiceById,
     updateMultipleChoice,
     deleteMultipleChoice,
-    searchMultipleChoices,
-    getQuestionsByTopic,
-    getRandomQuestions,
-    getAllMultipleChoiceTopics,
-    getAllMainTopics,
-    getSubTopicsByMainTopic,
-    getAllGroupedSubTopics
+    getAllMultipleChoicesByTestId
 };

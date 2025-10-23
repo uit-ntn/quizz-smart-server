@@ -31,6 +31,34 @@ const getAllTests = async (req, res) => {
     }
 };
 
+const getAllMultipleChoicesTests = async (req, res) => {
+    try {
+        const tests = await testService.getAllMultipleChoicesTests();
+        res.json(tests);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const getAllGrammarsTests = async (req, res) => {
+    try {
+        const tests = await testService.getAllGrammarsTests();
+        res.json(tests);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const getAllVocabulariesTests = async (req, res) => {
+    try {
+        const tests = await testService.getAllVocabulariesTests();
+        res.json(tests);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+
 // Get test by ID
 const getTestById = async (req, res) => {
     try {
@@ -112,13 +140,93 @@ const getTestsByType = async (req, res) => {
     }
 };
 
+
+
+// Get all multiple choice main topics
+const getAllMultipleChoicesMainTopics = async (req, res) => {
+    try {
+        const mainTopics = await testService.getAllMultipleChoicesMainTopics();
+
+        if (!mainTopics || mainTopics.length === 0) {
+            return res.status(404).json({ message: 'No main topics found for multiple-choice tests' });
+        }
+
+        res.status(200).json(mainTopics);
+    } catch (error) {
+        console.error('Error fetching multiple-choice main topics:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const getAllMultipleChoicesSubTopicsByMainTopic = async (req, res) => {
+    try {
+        const { mainTopic } = req.params;
+        const subTopics = await testService.getAllMultipleChoicesSubTopicsByMainTopic(mainTopic);
+
+        if (!subTopics || subTopics.length === 0) {
+            return res.status(404).json({ message: 'No subtopics found for this main topic' });
+        }
+
+        res.json(subTopics);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const getAllGrammarsMainTopics = async (req, res) => {
+    try {
+        const mainTopics = await testService.getAllGrammarsMainTopics();
+        res.status(200).json(mainTopics);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const getAllGrammarsSubTopicsByMainTopic = async (req, res) => {
+    try {
+        const { mainTopic } = req.params;
+        const subTopics = await testService.getAllGrammarsSubTopicsByMainTopic(mainTopic);
+        res.status(200).json(subTopics);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const getAllVocabulariesMainTopics = async (req, res) => {
+    try {
+        const mainTopics = await testService.getAllVocabulariesMainTopics();
+        res.status(200).json(mainTopics);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const getAllVocabulariesSubTopicsByMainTopic = async (req, res) => {
+    try {
+        const { mainTopic } = req.params;
+        const subTopics = await testService.getAllVocabulariesSubTopicsByMainTopic(mainTopic);
+        res.status(200).json(subTopics);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     createTest,
     getAllTests,
+    getAllMultipleChoicesTests,
+    getAllGrammarsTests,
+    getAllVocabulariesTests,
     getTestById,
     updateTest,
     deleteTest,
     searchTests,
     getTestsByTopic,
-    getTestsByType
+    getTestsByType,
+    getAllMultipleChoicesMainTopics,
+    getAllMultipleChoicesSubTopicsByMainTopic,
+    getAllGrammarsMainTopics,
+    getAllGrammarsSubTopicsByMainTopic,
+    getAllVocabulariesMainTopics,
+    getAllVocabulariesSubTopicsByMainTopic
 };

@@ -1,120 +1,168 @@
+const mongoose = require('mongoose');
 const vocabularyService = require('../services/vocabulary.service');
 
-// Create new vocabulary
+// =========================
+// 🟢 Create new vocabulary
+// =========================
 const createVocabulary = async (req, res) => {
     try {
         const vocabulary = await vocabularyService.createVocabulary({
             ...req.body,
             created_by: req.user?._id,
-            updated_by: req.user?._id
+            updated_by: req.user?._id,
         });
         res.status(201).json(vocabulary);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        console.error('Error creating vocabulary:', error);
+        res.status(500).json({ message: error.message });
     }
 };
 
-// Get all vocabularies
+// =========================
+// 📘 Get all vocabularies
+// =========================
 const getAllVocabularies = async (req, res) => {
     try {
-        const filters = {};
-        if (req.query.main_topic) filters.main_topic = req.query.main_topic;
-        if (req.query.difficulty) filters.difficulty = req.query.difficulty;
-        if (req.query.status) filters.status = req.query.status;
-
-        const vocabularies = await vocabularyService.getAllVocabularies(filters);
-        res.json(vocabularies);
+        const vocabularies = await vocabularyService.getAllVocabularies();
+        res.status(200).json(vocabularies);
     } catch (error) {
+        console.error('Error fetching vocabularies:', error);
         res.status(500).json({ message: error.message });
     }
 };
 
-// Get vocabulary by ID
+// =========================
+// 📘 Get all vocabularies by Test ID
+// =========================
+const getAllVocabulariesByTestId = async (req, res) => {
+    try {
+        const { testId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(testId)) {
+            return res.status(400).json({ message: 'Invalid test ID' });
+        }
+
+        const vocabularies = await vocabularyService.getAllVocabulariesByTestId(testId);
+        res.status(200).json(vocabularies);
+    } catch (error) {
+        console.error('Error fetching vocabularies by test ID:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// =========================
+// 📘 Get vocabulary by ID
+// =========================
 const getVocabularyById = async (req, res) => {
     try {
-        const vocabulary = await vocabularyService.getVocabularyById(req.params.id);
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: 'Invalid vocabulary ID' });
+        }
+
+        const vocabulary = await vocabularyService.getVocabularyById(id);
         if (!vocabulary) {
             return res.status(404).json({ message: 'Vocabulary not found' });
         }
-        res.json(vocabulary);
+        res.status(200).json(vocabulary);
     } catch (error) {
+        console.error('Error fetching vocabulary by ID:', error);
         res.status(500).json({ message: error.message });
     }
 };
 
-// Update vocabulary
+// =========================
+// 🟡 Update vocabulary
+// =========================
 const updateVocabulary = async (req, res) => {
     try {
-        const vocabulary = await vocabularyService.updateVocabulary(
-            req.params.id,
-            {
-                ...req.body,
-                updated_by: req.user?._id
-            }
-        );
-        if (!vocabulary) {
-            return res.status(404).json({ message: 'Vocabulary not found' });
-        }
-        res.json(vocabulary);
-    } catch (error) {
-        res.status(400).json({ message: error.message });
-    }
-};
+        const { id } = req.params;
 
-// Delete vocabulary
-const deleteVocabulary = async (req, res) => {
-    try {
-        const vocabulary = await vocabularyService.deleteVocabulary(req.params.id);
-        if (!vocabulary) {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: 'Invalid vocabulary ID' });
+        }
+
+        const updated = await vocabularyService.updateVocabulary(id, {
+            ...req.body,
+            updated_by: req.user?._id,
+        });
+
+        if (!updated) {
             return res.status(404).json({ message: 'Vocabulary not found' });
         }
-        res.json({ message: 'Vocabulary deleted successfully' });
+
+        res.status(200).json(updated);
     } catch (error) {
+        console.error('Error updating vocabulary:', error);
         res.status(500).json({ message: error.message });
     }
 };
 
-// Search vocabularies
+// =========================
+// 🔴 Delete vocabulary
+// =========================
+const deleteVocabulary = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: 'Invalid vocabulary ID' });
+        }
+
+        const deleted = await vocabularyService.deleteVocabulary(id);
+        if (!deleted) {
+            return res.status(404).json({ message: 'Vocabulary not found' });
+        }
+
+        res.status(200).json({ message: 'Vocabulary deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting vocabulary:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// =========================
+// 🔍 Search vocabularies (by word or meaning)
+// =========================
 const searchVocabularies = async (req, res) => {
     try {
         const { q } = req.query;
         if (!q) {
             return res.status(400).json({ message: 'Search term is required' });
         }
+
         const vocabularies = await vocabularyService.searchVocabularies(q);
-        res.json(vocabularies);
+        res.status(200).json(vocabularies);
     } catch (error) {
+        console.error('Error searching vocabularies:', error);
         res.status(500).json({ message: error.message });
     }
 };
 
-// Get all sub topics
-const getAllSubTopics = async (req, res) => {
+// =========================
+// 📘 Get all vocabulary main topics
+// =========================
+const getAllVocabularyMainTopics = async (req, res) => {
     try {
-        const result = await vocabularyService.getAllSubTopics();
-        res.json({ sub_topics: result });
+        const mainTopics = await vocabularyService.getAllVocabularyMainTopics();
+        res.status(200).json(mainTopics);
     } catch (error) {
+        console.error('Error fetching vocabulary main topics:', error);
         res.status(500).json({ message: error.message });
     }
 };
 
-// Get sub topics by main topic
-const getSubTopicsByMainTopic = async (req, res) => {
+// =========================
+// 📘 Get all vocabulary sub topics by main topic
+// =========================
+const getAllVocabularySubTopicsByMainTopic = async (req, res) => {
     try {
-        const mainTopic = req.params.main_topic;
-        const result = await vocabularyService.getSubTopicsByMainTopic(mainTopic);
-        res.json({ sub_topics: result });
+        const { mainTopic } = req.params;
+        const subTopics = await vocabularyService.getAllVocabularySubTopicsByMainTopic(mainTopic);
+        res.status(200).json(subTopics);
     } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-// Get all sub topics grouped by main topic
-const getAllGroupedSubTopics = async (req, res) => {
-    try {
-        const grouped = await vocabularyService.getAllGroupedSubTopics();
-        res.json(grouped);
-    } catch (error) {
+        console.error('Error fetching vocabulary sub topics by main topic:', error);
         res.status(500).json({ message: error.message });
     }
 };
@@ -122,11 +170,9 @@ const getAllGroupedSubTopics = async (req, res) => {
 module.exports = {
     createVocabulary,
     getAllVocabularies,
+    getAllVocabulariesByTestId,
     getVocabularyById,
     updateVocabulary,
     deleteVocabulary,
-    searchVocabularies,
-    getAllSubTopics,
-    getSubTopicsByMainTopic,
-    getAllGroupedSubTopics
+    searchVocabularies
 };

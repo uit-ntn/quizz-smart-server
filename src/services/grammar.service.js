@@ -13,10 +13,8 @@ const createGrammar = async (grammarData) => {
 // Get all grammar questions with optional filters
 const getAllGrammars = async (filters = {}) => {
     try {
-        const query = { ...filters };
-        return await Grammar.find(query)
-            .populate('created_by', 'username full_name')
-            .populate('updated_by', 'username full_name');
+        return await Grammar.find();
+
     } catch (error) {
         throw error;
     }
@@ -33,6 +31,15 @@ const getGrammarById = async (id) => {
     }
 };
 
+// Get grammar questions by test ID
+const getGrammarByTestId = async (testId) => {
+    try {
+        return await Grammar.find({ test_id: testId });
+    } catch (error) {
+        throw error;
+    }
+};
+
 // Update grammar question
 const updateGrammar = async (id, updateData) => {
     try {
@@ -41,7 +48,7 @@ const updateGrammar = async (id, updateData) => {
             { ...updateData, updated_at: new Date() },
             { new: true }
         ).populate('created_by', 'username full_name')
-         .populate('updated_by', 'username full_name');
+            .populate('updated_by', 'username full_name');
     } catch (error) {
         throw error;
     }
@@ -67,7 +74,7 @@ const searchGrammars = async (searchTerm) => {
                 { explanation_text: { $regex: searchTerm, $options: 'i' } }
             ]
         }).populate('created_by', 'username full_name')
-         .populate('updated_by', 'username full_name');
+            .populate('updated_by', 'username full_name');
     } catch (error) {
         throw error;
     }
@@ -125,12 +132,12 @@ const getAllGrammarTopics = async () => {
 
 // Get all sub topics
 const getAllSubTopics = async () => {
-  return Grammar.distinct('sub_topic');
+    return Grammar.distinct('sub_topic');
 };
 
 // Get sub topics by main topic
 const getSubTopicsByMainTopic = async (mainTopic) => {
-  return Grammar.distinct('sub_topic', { main_topic: mainTopic });
+    return Grammar.distinct('sub_topic', { main_topic: mainTopic });
 };
 
 // Get all sub topics, grouped and sorted by main_topic

@@ -1,26 +1,5 @@
 const userService = require('../services/user.service');
 
-// Register new user
-const register = async (req, res) => {
-    try {
-        const { user, token } = await userService.register(req.body);
-        res.status(201).json({ user, token });
-    } catch (error) {
-        res.status(400).json({ message: error.message });
-    }
-};
-
-// Login user
-const login = async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        const { user, token } = await userService.login(email, password);
-        res.json({ user, token });
-    } catch (error) {
-        res.status(401).json({ message: error.message });
-    }
-};
-
 // Get all users (admin only)
 const getAllUsers = async (req, res) => {
     try {
@@ -50,7 +29,7 @@ const getUserById = async (req, res) => {
 // Get current user profile
 const getProfile = async (req, res) => {
     try {
-        const user = await userService.getUserProfile(req.user._id);
+        const user = await userService.getUserProfile(req.user.userId);
         res.json(user);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -73,7 +52,7 @@ const updateUser = async (req, res) => {
 // Update current user profile
 const updateProfile = async (req, res) => {
     try {
-        const user = await userService.updateUser(req.user._id, req.body);
+        const user = await userService.updateUser(req.user.userId, req.body);
         res.json(user);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -84,7 +63,7 @@ const updateProfile = async (req, res) => {
 const updatePassword = async (req, res) => {
     try {
         const { oldPassword, newPassword } = req.body;
-        const result = await userService.updatePassword(req.user._id, oldPassword, newPassword);
+        const result = await userService.updatePassword(req.user.userId, oldPassword, newPassword);
         res.json(result);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -118,9 +97,8 @@ const searchUsers = async (req, res) => {
     }
 };
 
+
 module.exports = {
-    register,
-    login,
     getAllUsers,
     getUserById,
     getProfile,

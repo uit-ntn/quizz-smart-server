@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Vocabulary = require('../models/Vocabulary');
 
 // Create new vocabulary
@@ -11,12 +12,9 @@ const createVocabulary = async (vocabularyData) => {
 };
 
 // Get all vocabularies with optional filters
-const getAllVocabularies = async (filters = {}) => {
+const getAllVocabularies = async () => {
     try {
-        const query = { ...filters };
-        return await Vocabulary.find(query)
-            .populate('created_by', 'username full_name')
-            .populate('updated_by', 'username full_name');
+        return await Vocabulary.find()
     } catch (error) {
         throw error;
     }
@@ -28,6 +26,15 @@ const getVocabularyById = async (id) => {
         return await Vocabulary.findById(id)
             .populate('created_by', 'username full_name')
             .populate('updated_by', 'username full_name');
+    } catch (error) {
+        throw error;
+    }
+};
+
+// Get all vocabularies by test ID
+const getAllVocabulariesByTestId = async (testId) => {
+    try {
+        return await Vocabulary.find({ test_id: new mongoose.Types.ObjectId(testId) })
     } catch (error) {
         throw error;
     }
@@ -71,82 +78,12 @@ const searchVocabularies = async (searchTerm) => {
     }
 };
 
-
-const getVocabularyByMainTopic = async (mainTopic) => {
-    try {
-        return await Vocabulary.find({ main_topic: mainTopic })
-            .populate('created_by', 'username full_name')
-            .populate('updated_by', 'username full_name');
-    } catch (error) {
-        throw error;
-    }
-};
-
-const getVocabularyBySubTopic = async (subTopic) => {
-    try {
-        return await Vocabulary.find({ sub_topic: subTopic })
-            .populate('created_by', 'username full_name')
-            .populate('updated_by', 'username full_name');
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Get all vocabulary topics
-const getAllVocabularyTopics = async () => {
-    try {
-        const topics = await Vocabulary.distinct('main_topic');
-        const topicDetails = await Promise.all(
-            topics.map(async (mainTopic) => {
-                const subTopics = await Vocabulary.distinct('sub_topic', { main_topic: mainTopic });
-                const count = await Vocabulary.countDocuments({ main_topic: mainTopic });
-                return {
-                    main_topic: mainTopic,
-                    sub_topics: subTopics,
-                    total_questions: count,
-                    type: 'vocabulary'
-                };
-            })
-        );
-        return topicDetails;
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Get all sub topics
-const getAllSubTopics = async () => {
-  return Vocabulary.distinct('sub_topic');
-};
-
-// Get sub topics by main topic
-const getSubTopicsByMainTopic = async (mainTopic) => {
-  return Vocabulary.distinct('sub_topic', { main_topic: mainTopic });
-};
-
-// Get all sub topics, grouped and sorted by main_topic
-const getAllGroupedSubTopics = async () => {
-    const mainTopics = await Vocabulary.distinct('main_topic');
-    const sortedMainTopics = mainTopics.sort();
-    const result = {};
-    for (let mainTopic of sortedMainTopics) {
-        let subTopics = await Vocabulary.distinct('sub_topic', { main_topic: mainTopic });
-        result[mainTopic] = subTopics.sort();
-    }
-    return result;
-};
-
 module.exports = {
     createVocabulary,
     getAllVocabularies,
     getVocabularyById,
+    getAllVocabulariesByTestId,
     updateVocabulary,
     deleteVocabulary,
-    searchVocabularies,
-    getVocabularyByMainTopic,
-    getVocabularyBySubTopic,
-    getAllVocabularyTopics,
-    getAllSubTopics,
-    getSubTopicsByMainTopic,
-    getAllGroupedSubTopics
+    searchVocabularies
 };

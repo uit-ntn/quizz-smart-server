@@ -3,67 +3,202 @@ const router = express.Router();
 const vocabularyController = require('../controllers/vocabulary.controller');
 const { authMiddleware, authorize } = require('../middleware/auth.middleware');
 
+router.get('/', vocabularyController.getAllVocabularies);
+router.get('/test/:testId', vocabularyController.getAllVocabulariesByTestId);
+router.get('/:id', vocabularyController.getVocabularyById);
+router.post('/', vocabularyController.createVocabulary);
+router.put('/:id', vocabularyController.updateVocabulary);
+router.delete('/:id', vocabularyController.deleteVocabulary);
+router.get('/search', vocabularyController.searchVocabularies);
+module.exports = router;
+
 /**
  * @swagger
- * components:
- *   schemas:
- *     CreateVocabularyRequest:
- *       type: object
- *       required:
- *         - main_topic
- *         - sub_topic
- *         - word
- *         - meaning
- *         - example_sentence
- *       properties:
- *         main_topic:
- *           type: string
- *           example: "Vocabulary"
- *         sub_topic:
- *           type: string
- *           example: "Education"
- *         word:
- *           type: string
- *           example: "scholarship"
- *         meaning:
- *           type: string
- *           example: "học bổng"
- *         example_sentence:
- *           type: string
- *           example: "She won a full scholarship to study abroad."
- *         difficulty:
- *           type: string
- *           enum: [easy, medium, hard]
- *           default: medium
- *           example: "easy"
- *         tags:
- *           type: array
- *           items:
- *             type: string
- *           example: ["education", "noun", "vocabulary"]
- *         status:
- *           type: string
- *           enum: [active, inactive, draft]
- *           default: active
- *           example: "active"
+ * tags:
+ *   name: Vocabularies
+ *   description: Vocabulary management endpoints
  */
 
-// GET routes - static paths first, then dynamic paths
-router.get('/', vocabularyController.getAllVocabularies);
-router.get('/sub-topics', vocabularyController.getAllSubTopics);
-router.get('/sub-topics-grouped', vocabularyController.getAllGroupedSubTopics);
-router.get('/sub-topics/:main_topic', vocabularyController.getSubTopicsByMainTopic);
-router.get('/search', vocabularyController.searchVocabularies);
-// Dynamic :id routes
-router.get('/:id', vocabularyController.getVocabularyById);
+/**
+ * @swagger
+ * /api/vocabularies:
+ *   get:
+ *     summary: Get all vocabularies
+ *     tags: [Vocabularies]
+ *     responses:
+ *       200:
+ *         description: List of all vocabularies
+ *       500:
+ *         description: Server error
+ */
 
-// POST routes
-router.post('/', authMiddleware, authorize('admin', 'teacher'), vocabularyController.createVocabulary);
+/**
+ * @swagger
+ * /api/vocabularies/sub-topics:
+ *   get:
+ *     summary: Get all sub topics
+ *     tags: [Vocabularies]
+ *     responses:
+ *       200:
+ *         description: List of all sub topics
+ *       500:
+ *         description: Server error
+ */
 
-// PUT routes
-router.put('/:id', authMiddleware, authorize('admin', 'teacher'), vocabularyController.updateVocabulary);
+/**
+ * @swagger
+ * /api/vocabularies/{id}:
+ *   get:
+ *     summary: Get vocabulary by ID
+ *     tags: [Vocabularies]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Vocabulary ID
+ *     responses:
+ *       200:
+ *         description: Vocabulary details
+ *       404:
+ *         description: Vocabulary not found
+ *       500:
+ *         description: Server error
+ */
 
-// DELETE routes
-router.delete('/:id', authMiddleware, authorize('admin', 'teacher'), vocabularyController.deleteVocabulary);
+/**
+ * @swagger
+ * /api/vocabularies:
+ *   post:
+ *     summary: Create a new vocabulary (Admin/Teacher only)
+ *     tags: [Vocabularies]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - main_topic
+ *               - sub_topic
+ *               - word
+ *               - meaning
+ *               - example_sentence
+ *             properties:
+ *               main_topic:
+ *                 type: string
+ *               sub_topic:
+ *                 type: string
+ *               word:
+ *                 type: string
+ *               meaning:
+ *                 type: string
+ *               example_sentence:
+ *                 type: string
+ *               difficulty:
+ *                 type: string
+ *                 enum: [easy, medium, hard]
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive]
+ *     responses:
+ *       201:
+ *         description: Vocabulary created successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin/Teacher access required
+ *       500:
+ *         description: Server error
+ */
 
-module.exports = router;
+/**
+ * @swagger
+ * /api/vocabularies/{id}:
+ *   put:
+ *     summary: Update vocabulary (Admin/Teacher only)
+ *     tags: [Vocabularies]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Vocabulary ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               main_topic:
+ *                 type: string
+ *               sub_topic:
+ *                 type: string
+ *               word:
+ *                 type: string
+ *               meaning:
+ *                 type: string
+ *               example_sentence:
+ *                 type: string
+ *               difficulty:
+ *                 type: string
+ *                 enum: [easy, medium, hard]
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive]
+ *     responses:
+ *       200:
+ *         description: Vocabulary updated successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin/Teacher access required
+ *       404:
+ *         description: Vocabulary not found
+ *       500:
+ *         description: Server error
+ */
+
+/**
+ * @swagger
+ * /api/vocabularies/{id}:
+ *   delete:
+ *     summary: Delete vocabulary (Admin/Teacher only)
+ *     tags: [Vocabularies]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Vocabulary ID
+ *     responses:
+ *       200:
+ *         description: Vocabulary deleted successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin/Teacher access required
+ *       404:
+ *         description: Vocabulary not found
+ *       500:
+ *         description: Server error
+ */
+

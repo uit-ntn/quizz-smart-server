@@ -105,6 +105,101 @@ const getUserProfile = async (id) => {
     return await User.findById(id).select('-password');
 };
 
+// Google OAuth login/register
+const googleAuth = async (profile) => {
+    try {
+        // Check if user already exists with this Google ID
+        let user = await User.findOne({ googleId: profile.id });
+        
+        if (user) {
+            // Generate JWT token
+            const token = jwt.sign(
+                { userId: user._id, role: user.role },
+                process.env.JWT_SECRET || 'Nhan123456',
+                { expiresIn: '7d' }
+            );
+            return { user, token, isNewUser: false };
+        }
+
+        // Check if user exists with this email (from local registration)
+        user = await User.findOne({ email: profile.emails[0].value });
+        
+        if (user) {
+            // Link Google account to existing user
+            user.googleId = profile.id;
+            user.authProvider = 'google';
+            user.avatar_url = profile.photos[0]?.value || user.avatar_url;
+            await user.save();
+            
+            const token = jwt.sign(
+                { userId: user._id, role: user.role },
+                process.env.JWT_SECRET || 'Nhan123456',
+                { expiresIn: '7d' }
+            );
+            return { user, token, isNewUser: false };
+        }
+
+        // Create new user
+        user = new User({
+            googleId: profile.id,
+            email: profile.emails[0].value,
+            full_name: profile.displayName,
+            authProvider: 'google',
+            avatar_url: profile.photos[0]?.value
+        });
+
+        await user.save();
+        
+        const token = jwt.sign(
+            { userId: user._id, role: user.role },
+            process.env.JWT_SECRET || 'Nhan123456',
+            { expiresIn: '7d' }
+        );
+        
+        return { user, token, isNewUser: true };
+    } catch (error) {
+        throw new Error('Google authentication failed');
+    }
+};
+
+// Find or create user from Google profile
+const findOrCreateGoogleUser = async (profile) => {
+    try {
+        // Check if user already exists with this Google ID
+        let user = await User.findOne({ googleId: profile.id });
+        
+        if (user) {
+            return user;
+        }
+
+        // Check if user exists with this email
+        user = await User.findOne({ email: profile.emails[0].value });
+        
+        if (user) {
+            // Link Google account to existing user
+            user.googleId = profile.id;
+            user.authProvider = 'google';
+            user.avatar_url = profile.photos[0]?.value || user.avatar_url;
+            await user.save();
+            return user;
+        }
+
+        // Create new user
+        user = new User({
+            googleId: profile.id,
+            email: profile.emails[0].value,
+            full_name: profile.displayName,
+            authProvider: 'google',
+            avatar_url: profile.photos[0]?.value
+        });
+
+        await user.save();
+        return user;
+    } catch (error) {
+        throw error;
+    }
+};
+
 module.exports = {
     register,
     login,
@@ -114,5 +209,7 @@ module.exports = {
     updatePassword,
     deleteUser,
     searchUsers,
-    getUserProfile
+    getUserProfile,
+    googleAuth,
+    findOrCreateGoogleUser
 };
