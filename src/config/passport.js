@@ -40,6 +40,7 @@ passport.use(new GoogleStrategy({
             user.googleId = profile.id;
             user.authProvider = 'google';
             user.avatar_url = profile.photos[0]?.value || user.avatar_url;
+            user.email_verified = true; // Google accounts are verified
             
             // Đảm bảo lưu vào database
             const savedUser = await user.save();
@@ -54,7 +55,8 @@ passport.use(new GoogleStrategy({
             email: profile.emails[0].value,
             full_name: profile.displayName,
             authProvider: 'google',
-            avatar_url: profile.photos[0]?.value
+            avatar_url: profile.photos[0]?.value,
+            email_verified: true // Google accounts are already verified
         });
 
         // Đảm bảo lưu user mới vào database

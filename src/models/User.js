@@ -41,6 +41,10 @@ const userSchema = new mongoose.Schema({
     avatar_url: {
         type: String,
         default: null
+    },
+    email_verified: {
+        type: Boolean,
+        default: false
     }
 }, {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
@@ -63,6 +67,7 @@ userSchema.pre('save', async function(next) {
 userSchema.methods.comparePassword = async function(candidatePassword) {
     return bcrypt.compare(candidatePassword, this.password);
 };
+
 
 // Don't return password in JSON
 userSchema.methods.toJSON = function() {

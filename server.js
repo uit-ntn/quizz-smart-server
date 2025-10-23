@@ -4,19 +4,55 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const morgan = require('morgan');
 const session = require('express-session');
+
+// Load environment variables FIRST
+dotenv.config();
+
 const passport = require('./src/config/passport');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./src/config/swagger');
 
-// Load environment variables
-dotenv.config();
-
 const app = express();
 
-// Middleware
+// Enhanced CORS middleware
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, Postman, etc.)
+        if (!origin) return callback(null, true);
+        
+        const allowedOrigins = [
+            process.env.FRONTEND_URL || 'http://localhost:3000',
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
+            'http://localhost:3001',
+            'http://127.0.0.1:3001'
+        ];
+        
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        
+        // Allow localhost on any port for development
+        if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+            return callback(null, true);
+        }
+        
+        console.log('⚠️ CORS blocked origin:', origin);
+        callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: [
+        'Content-Type', 
+        'Authorization', 
+        'X-Requested-With',
+        'Accept',
+        'Origin',
+        'Access-Control-Request-Method',
+        'Access-Control-Request-Headers'
+    ],
+    exposedHeaders: ['Set-Cookie'],
+    maxAge: 86400 // 24 hours
 }));
 app.use(express.json());
 
@@ -41,6 +77,17 @@ app.use(morgan('combined')); // hoặc 'dev' cho development
 // Swagger documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 
+// Health check endpoint (for frontend to test backend connection)
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        service: 'quiz-smart-server',
+        version: '1.0.0',
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
+
 // Routes
 const authRoutes = require('./src/routes/auth.routes');
 const userRoutes = require('./src/routes/user.routes');
@@ -64,7 +111,7 @@ app.use('/api/multiple-choices', multipleChoiceRoutes);
 app.use('/api/grammars', grammarRoutes);
 
 // MongoDB connection string
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quizsmart';
+const MONGODB_URI = 'mongodb+srv://npthanhnhan2003:13012003NTN@cluster0.rjn9pon.mongodb.net/quiz-smart?retryWrites=true&w=majority&appName=Cluster0';
 
 // Hàm async để connect
 async function connectDB() {

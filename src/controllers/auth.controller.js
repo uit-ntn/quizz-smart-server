@@ -1,11 +1,13 @@
+const authService = require('../services/auth.service');
 const userService = require('../services/user.service');
+const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 
-// Register new user
+// Register new user (send OTP)
 const register = async (req, res) => {
     try {
-        const { user, token } = await userService.register(req.body);
-        res.status(201).json({ user, token });
+        const result = await authService.register(req.body);
+        res.status(200).json(result);
     } catch (error) {
         res.status(400).json({ message: error.message });
     }
@@ -15,7 +17,7 @@ const register = async (req, res) => {
 const login = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const { user, token } = await userService.login(email, password);
+        const { user, token } = await authService.login(email, password);
         res.json({ user, token });
     } catch (error) {
         res.status(401).json({ message: error.message });
@@ -32,7 +34,7 @@ const googleAuthSuccess = async (req, res) => {
         'referer': req.headers.referer,
         'x-forwarded-for': req.headers['x-forwarded-for']
     });
-    
+
     try {
         if (!req.user) {
             console.log('❌ Google OAuth - No user in request object');
@@ -51,7 +53,7 @@ const googleAuthSuccess = async (req, res) => {
         // Generate JWT token
         const jwtPayload = { userId: req.user._id, role: req.user.role };
         console.log('🔐 Creating JWT token with payload:', jwtPayload);
-        
+
         const token = jwt.sign(
             jwtPayload,
             process.env.JWT_SECRET || 'Nhan123456',
@@ -64,9 +66,9 @@ const googleAuthSuccess = async (req, res) => {
         // You can customize this redirect URL based on your frontend
         const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3000';
         const redirectURL = `${frontendURL}/auth/success?token=${token}`;
-        
+
         console.log('↗️ Redirecting to frontend URL:', redirectURL);
-        
+
         // Redirect to frontend with token
         res.redirect(redirectURL);
         console.log('✅ Redirect response sent');
@@ -84,10 +86,10 @@ const googleAuthFailure = (req, res) => {
     console.log('📊 Request query params:', req.query);
     console.log('📊 Request session:', req.session);
     console.log('📊 Error details:', req.flash ? req.flash() : 'No flash messages');
-    
+
     const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3000';
     const failureURL = `${frontendURL}/auth/failure`;
-    
+
     console.log('↗️ Redirecting to failure URL:', failureURL);
     res.redirect(failureURL);
 };
@@ -114,7 +116,7 @@ const googleAuthStatus = (req, res) => {
 const verifyUserInDB = async (req, res) => {
     try {
         const user = await userService.getUserById(req.user.userId);
-        
+
         if (user) {
             console.log('✅ User verified in database:', user.email, 'Auth Provider:', user.authProvider);
             res.json({
@@ -141,9 +143,9 @@ const logout = (req, res) => {
         // For JWT, we just send success response
         // Client should remove token from localStorage
         console.log('👋 User logged out');
-        res.json({ 
-            success: true, 
-            message: 'Logged out successfully' 
+        res.json({
+            success: true,
+            message: 'Logged out successfully'
         });
     } catch (error) {
         console.error('❌ Logout error:', error);
@@ -151,16 +153,149 @@ const logout = (req, res) => {
     }
 };
 
-// Get current user profile (from token)
+// auth.controller.js
 const me = async (req, res) => {
     try {
-        const user = await userService.getUserById(req.user.userId);
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+        // req.user do authMiddleware gắn sẵn là document User
+        return res.json(req.user);
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
+    }
+};
+
+// Health check endpoint
+const healthCheck = (req, res) => {
+    res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        service: 'quiz-smart-server',
+        version: '1.0.0'
+    });
+};
+
+// Generate test token for debugging (DEV ONLY)
+const generateTestToken = async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ message: 'Not available in production' });
+    }
+
+    try {
+        // Find first user in database for testing
+        const testUser = await User.findOne({});
+        if (!testUser) {
+            return res.status(404).json({ message: 'No users found in database' });
         }
-        res.json(user);
+
+        // Generate token for test user
+        const token = jwt.sign(
+            { userId: testUser._id, role: testUser.role },
+            process.env.JWT_SECRET || 'Nhan123456',
+            { expiresIn: '1h' }
+        );
+
+        res.json({
+            message: 'Test token generated (DEV ONLY)',
+            token: token,
+            user: {
+                id: testUser._id,
+                email: testUser.email,
+                role: testUser.role,
+                authProvider: testUser.authProvider,
+                emailVerified: testUser.email_verified
+            }
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+// Debug Google OAuth configuration
+const debugGoogleOAuth = (req, res) => {
+    const config = {
+        googleClientId: process.env.GOOGLE_CLIENT_ID ? 'Set' : 'Not Set',
+        googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ? 'Set' : 'Not Set',
+        googleCallbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:8000/api/auth/google/callback',
+        frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+        sessionSecret: process.env.SESSION_SECRET ? 'Set' : 'Using Default',
+        nodeEnv: process.env.NODE_ENV || 'development'
+    };
+
+    res.json({
+        message: 'Google OAuth Debug Info',
+        config: config,
+        urls: {
+            googleAuthUrl: `${req.protocol}://${req.get('host')}/api/auth/google`,
+            callbackUrl: `${req.protocol}://${req.get('host')}/api/auth/google/callback`,
+            statusUrl: `${req.protocol}://${req.get('host')}/api/auth/status`
+        }
+    });
+};
+
+// Verify registration OTP
+const verifyRegistrationOTP = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        if (!email || !otp) {
+            return res.status(400).json({ message: 'Email and OTP are required' });
+        }
+
+        const result = await authService.verifyRegistrationOTP(email, otp);
+        res.json(result);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+// Resend registration OTP
+const resendRegistrationOTP = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ message: 'Email is required' });
+        }
+
+        const result = await authService.resendRegistrationOTP(email);
+        res.json(result);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+// Forgot password (send OTP)
+const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ message: 'Email is required' });
+        }
+
+        const result = await authService.forgotPassword(email);
+        res.json(result);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+// Reset password with OTP
+const resetPasswordWithOTP = async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({ message: 'Email, OTP and new password are required' });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+        }
+
+        const result = await authService.resetPasswordWithOTP(email, otp, newPassword);
+        res.json(result);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
     }
 };
 
@@ -172,5 +307,12 @@ module.exports = {
     googleAuthSuccess,
     googleAuthFailure,
     googleAuthStatus,
-    verifyUserInDB
+    verifyUserInDB,
+    healthCheck,
+    generateTestToken,
+    debugGoogleOAuth,
+    verifyRegistrationOTP,
+    resendRegistrationOTP,
+    forgotPassword,
+    resetPasswordWithOTP
 };

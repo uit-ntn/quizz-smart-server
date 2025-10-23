@@ -13,9 +13,39 @@ const { authMiddleware } = require('../middleware/auth.middleware');
 
 /**
  * @swagger
+ * /api/auth/health:
+ *   get:
+ *     summary: Health check endpoint
+ *     description: Check if the authentication service is running
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: healthy
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                 service:
+ *                   type: string
+ *                   example: quiz-smart-server
+ *                 version:
+ *                   type: string
+ *                   example: 1.0.0
+ */
+router.get('/health', authController.healthCheck);
+
+/**
+ * @swagger
  * /api/auth/register:
  *   post:
- *     summary: Register a new user
+ *     summary: Register a new user (sends OTP for email verification)
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -37,21 +67,21 @@ const { authMiddleware } = require('../middleware/auth.middleware');
  *               full_name:
  *                 type: string
  *     responses:
- *       201:
- *         description: User registered successfully
+ *       200:
+ *         description: OTP sent to email for verification
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 user:
- *                   type: object
- *                 token:
+ *                 message:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *                 userId:
  *                   type: string
  *       400:
- *         description: Bad request - validation error
- *       409:
- *         description: User already exists
+ *         description: Bad request - validation error or user already exists
  */
 router.post('/register', authController.register);
 
@@ -129,16 +159,166 @@ router.get('/me', authMiddleware, authController.me);
 
 /**
  * @swagger
+ * /api/auth/verify-registration-otp:
+ *   post:
+ *     summary: Verify registration OTP and complete user registration
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               otp:
+ *                 type: string
+ *                 minLength: 6
+ *                 maxLength: 6
+ *     responses:
+ *       200:
+ *         description: Email verified successfully, registration completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   type: object
+ *                 token:
+ *                   type: string
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Invalid or expired OTP
+ */
+router.post('/verify-registration-otp', authController.verifyRegistrationOTP);
+
+/**
+ * @swagger
+ * /api/auth/resend-registration-otp:
+ *   post:
+ *     summary: Resend registration OTP
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: New OTP sent successfully
+ *       400:
+ *         description: Bad request or email already verified
+ */
+router.post('/resend-registration-otp', authController.resendRegistrationOTP);
+
+/**
+ * @swagger
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Send OTP for password reset
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Password reset OTP sent to email
+ *       400:
+ *         description: User not found or email not verified
+ */
+router.post('/forgot-password', authController.forgotPassword);
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset password with OTP (One-step process)
+ *     description: Reset password by providing email, OTP received via email, and new password in one step
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *               - newPassword
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Email address of the user
+ *               otp:
+ *                 type: string
+ *                 minLength: 6
+ *                 maxLength: 6
+ *                 description: 6-digit OTP received via email
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 6
+ *                 description: New password (minimum 6 characters)
+ *             example:
+ *               email: "user@example.com"
+ *               otp: "123456"
+ *               newPassword: "newPassword123"
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Password reset successfully"
+ *       400:
+ *         description: Invalid OTP, expired OTP, or password validation error
+ */
+router.post('/reset-password', authController.resetPasswordWithOTP);
+
+/**
+ * @swagger
  * /api/auth/google:
  *   get:
- *     summary: Initiate Google OAuth authentication
+ *     summary: Initiate Google OAuth authentication with account picker
+ *     description: Redirects to Google OAuth with account selection screen, allowing users to choose from their Google accounts
  *     tags: [Authentication]
  *     responses:
  *       302:
- *         description: Redirects to Google OAuth consent screen
+ *         description: Redirects to Google OAuth account picker and consent screen
  */
 router.get('/google',
-    passport.authenticate('google', { scope: ['profile', 'email'] })
+    passport.authenticate('google', { 
+        scope: ['profile', 'email'],
+        prompt: 'select_account consent',  // Account picker + consent screen
+        accessType: 'offline'             // Get refresh token
+    })
 );
 
 /**
@@ -205,6 +385,45 @@ router.get('/google/failure', (req, res, next) => {
  *         description: Not authenticated
  */
 router.get('/status', authController.googleAuthStatus);
+
+/**
+ * @swagger
+ * /api/auth/debug-google:
+ *   get:
+ *     summary: Debug Google OAuth configuration (Development only)
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Google OAuth debug information
+ */
+router.get('/debug-google', authController.debugGoogleOAuth);
+
+/**
+ * @swagger
+ * /api/auth/generate-test-token:
+ *   get:
+ *     summary: Generate test token for debugging (Development only)
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Test token generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 token:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *       403:
+ *         description: Not available in production
+ *       404:
+ *         description: No users found in database
+ */
+router.get('/generate-test-token', authController.generateTestToken);
 
 /**
  * @swagger
