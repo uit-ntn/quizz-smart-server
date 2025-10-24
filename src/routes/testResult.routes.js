@@ -208,8 +208,133 @@ router.post('/', testResultController.createTestResult);
 /**
  * @swagger
  * /api/test-results/{id}:
+ *   put:
+ *     summary: Update test result
+ *     tags: [Test Results]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Test result ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [draft, active, deleted]
+ *               device_info:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Test result updated successfully
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Test result not found
+ *       500:
+ *         description: Server error
+ */
+router.put('/:id', testResultController.updateTestResult);
+
+/**
+ * @swagger
+ * /api/test-results/{id}/status:
+ *   patch:
+ *     summary: Update test result status
+ *     tags: [Test Results]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Test result ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [draft, active, deleted]
+ *     responses:
+ *       200:
+ *         description: Status updated successfully
+ *       400:
+ *         description: Invalid status
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Test result not found
+ *       500:
+ *         description: Server error
+ */
+router.patch('/:id/status', authorize('admin'), testResultController.updateStatusById);
+
+/**
+ * @swagger
+ * /api/test-results/test/{testId}/status:
+ *   patch:
+ *     summary: Update all test results status by test ID (Admin only)
+ *     tags: [Test Results]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: testId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Test ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [draft, active, deleted]
+ *     responses:
+ *       200:
+ *         description: Test results status updated successfully
+ *       400:
+ *         description: Invalid status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin access required
+ *       500:
+ *         description: Server error
+ */
+router.patch('/test/:testId/status', authorize('admin'), testResultController.updateStatusByTestId);
+
+/**
+ * @swagger
+ * /api/test-results/{id}:
  *   delete:
- *     summary: Delete test result (Admin only)
+ *     summary: Soft delete test result
  *     tags: [Test Results]
  *     security:
  *       - bearerAuth: []
@@ -225,6 +350,33 @@ router.post('/', testResultController.createTestResult);
  *         description: Test result deleted successfully
  *       401:
  *         description: Unauthorized
+ *       404:
+ *         description: Test result not found
+ *       500:
+ *         description: Server error
+ */
+router.delete('/:id', testResultController.softDeleteTestResult);
+
+/**
+ * @swagger
+ * /api/test-results/{id}/hard-delete:
+ *   delete:
+ *     summary: Permanently delete test result (Admin only)
+ *     tags: [Test Results]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Test result ID
+ *     responses:
+ *       200:
+ *         description: Test result permanently deleted
+ *       401:
+ *         description: Unauthorized
  *       403:
  *         description: Forbidden - Admin access required
  *       404:
@@ -232,7 +384,36 @@ router.post('/', testResultController.createTestResult);
  *       500:
  *         description: Server error
  */
-router.delete('/:id', authorize('admin'), testResultController.deleteTestResult);
+router.delete('/:id/hard-delete', authorize('admin'), testResultController.hardDeleteTestResult);
+
+/**
+ * @swagger
+ * /api/test-results/{id}/restore:
+ *   patch:
+ *     summary: Restore deleted test result (Admin only)
+ *     tags: [Test Results]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Test result ID
+ *     responses:
+ *       200:
+ *         description: Test result restored successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin access required
+ *       404:
+ *         description: Deleted test result not found
+ *       500:
+ *         description: Server error
+ */
+router.patch('/:id/restore', authorize('admin'), testResultController.restoreTestResult);
 
 module.exports = router;
 

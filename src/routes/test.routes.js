@@ -17,6 +17,9 @@ router.get('/search', testController.searchTests);
 
 router.get('/', testController.getAllTests);
 
+// Get tests created by current user (requires authentication)
+router.get('/my-tests', authMiddleware, testController.getMyTests);
+
 router.get('/type/:testType', testController.getTestsByType);
 
 router.get('/topic/:mainTopic/:subTopic', testController.getTestsByTopic);
@@ -25,7 +28,8 @@ router.get('/topic/:mainTopic', testController.getTestsByTopic);
 
 router.get('/:id', testController.getTestById);
 
-router.post('/', authMiddleware, authorize('admin'), testController.createTest);
+// Allow authenticated users to create tests (for their own vocabulary tests)
+router.post('/', authMiddleware, testController.createTest);
 
 router.put('/:id', authMiddleware, authorize('admin'), testController.updateTest);
 
@@ -76,6 +80,98 @@ module.exports = router;
  *     responses:
  *       200:
  *         description: Search results
+ *       500:
+ *         description: Server error
+ */
+
+/**
+ * @swagger
+ * /api/tests/my-tests:
+ *   get:
+ *     summary: Get tests created by current user
+ *     tags: [Tests]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: main_topic
+ *         schema:
+ *           type: string
+ *         description: Filter by main topic
+ *       - in: query
+ *         name: sub_topic
+ *         schema:
+ *           type: string
+ *         description: Filter by sub topic
+ *       - in: query
+ *         name: test_type
+ *         schema:
+ *           type: string
+ *           enum: [vocabulary, grammar, multiple_choice]
+ *         description: Filter by test type
+ *       - in: query
+ *         name: difficulty
+ *         schema:
+ *           type: string
+ *           enum: [easy, medium, hard]
+ *         description: Filter by difficulty
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [active, inactive, draft]
+ *         description: Filter by status
+ *     responses:
+ *       200:
+ *         description: List of tests created by current user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                     example: "507f1f77bcf86cd799439011"
+ *                   test_title:
+ *                     type: string
+ *                     example: "My Vocabulary Test"
+ *                   description:
+ *                     type: string
+ *                     example: "Custom vocabulary test"
+ *                   main_topic:
+ *                     type: string
+ *                     example: "Business English"
+ *                   sub_topic:
+ *                     type: string
+ *                     example: "Office Communication"
+ *                   test_type:
+ *                     type: string
+ *                     example: "vocabulary"
+ *                   difficulty:
+ *                     type: string
+ *                     example: "medium"
+ *                   time_limit_minutes:
+ *                     type: integer
+ *                     example: 15
+ *                   total_questions:
+ *                     type: integer
+ *                     example: 20
+ *                   status:
+ *                     type: string
+ *                     example: "active"
+ *                   created_by:
+ *                     type: string
+ *                     example: "507f1f77bcf86cd799439011"
+ *                   created_at:
+ *                     type: string
+ *                     format: date-time
+ *                   updated_at:
+ *                     type: string
+ *                     format: date-time
+ *       401:
+ *         description: Unauthorized - Authentication required
  *       500:
  *         description: Server error
  */
@@ -175,7 +271,7 @@ module.exports = router;
  * @swagger
  * /api/tests:
  *   post:
- *     summary: Create a new test (Admin only)
+ *     summary: Create a new test (Authenticated users)
  *     tags: [Tests]
  *     security:
  *       - bearerAuth: []
@@ -185,26 +281,143 @@ module.exports = router;
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - test_title
+ *               - main_topic
+ *               - sub_topic
+ *               - test_type
  *             properties:
- *               title:
+ *               test_title:
  *                 type: string
+ *                 description: Title of the test
+ *                 example: "My Custom Vocabulary Test"
  *               description:
  *                 type: string
+ *                 description: Description of the test
+ *                 example: "A custom vocabulary test for business English"
+ *               main_topic:
+ *                 type: string
+ *                 description: Main topic category
+ *                 example: "Business English"
+ *               sub_topic:
+ *                 type: string
+ *                 description: Sub topic category
+ *                 example: "Office Communication"
  *               test_type:
  *                 type: string
- *               questions:
- *                 type: array
- *                 items:
- *                   type: string
+ *                 enum: [vocabulary, grammar, multiple_choice]
+ *                 description: Type of the test
+ *                 example: "vocabulary"
+ *               difficulty:
+ *                 type: string
+ *                 enum: [easy, medium, hard]
+ *                 description: Difficulty level
+ *                 default: easy
+ *                 example: "medium"
+ *               time_limit_minutes:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 120
+ *                 description: Time limit in minutes
+ *                 default: 10
+ *                 example: 15
+ *               total_questions:
+ *                 type: integer
+ *                 description: Total number of questions
+ *                 example: 20
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive, draft]
+ *                 description: Test status
+ *                 default: active
+ *                 example: "active"
+ *           example:
+ *             test_title: "Business Vocabulary Test"
+ *             description: "Essential vocabulary for business communication"
+ *             main_topic: "Business English"
+ *             sub_topic: "Office Communication"
+ *             test_type: "vocabulary"
+ *             difficulty: "medium"
+ *             time_limit_minutes: 15
+ *             total_questions: 20
+ *             status: "active"
  *     responses:
  *       201:
  *         description: Test created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                   example: "507f1f77bcf86cd799439011"
+ *                 test_title:
+ *                   type: string
+ *                   example: "Business Vocabulary Test"
+ *                 description:
+ *                   type: string
+ *                   example: "Essential vocabulary for business communication"
+ *                 main_topic:
+ *                   type: string
+ *                   example: "Business English"
+ *                 sub_topic:
+ *                   type: string
+ *                   example: "Office Communication"
+ *                 test_type:
+ *                   type: string
+ *                   example: "vocabulary"
+ *                 difficulty:
+ *                   type: string
+ *                   example: "medium"
+ *                 time_limit_minutes:
+ *                   type: integer
+ *                   example: 15
+ *                 total_questions:
+ *                   type: integer
+ *                   example: 20
+ *                 status:
+ *                   type: string
+ *                   example: "active"
+ *                 created_by:
+ *                   type: string
+ *                   example: "507f1f77bcf86cd799439011"
+ *                 created_at:
+ *                   type: string
+ *                   format: date-time
+ *                 updated_at:
+ *                   type: string
+ *                   format: date-time
+ *       400:
+ *         description: Bad request - Invalid input data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Validation error: test_title is required"
  *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - Admin access required
+ *         description: Unauthorized - Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid token"
  *       500:
  *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Internal server error"
  */
 
 

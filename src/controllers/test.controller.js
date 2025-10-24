@@ -31,6 +31,28 @@ const getAllTests = async (req, res) => {
     }
 };
 
+// Get tests created by current user
+const getMyTests = async (req, res) => {
+    try {
+        const filters = { created_by: req.user._id };
+        
+        // Allow additional filtering
+        if (req.query.main_topic) filters.main_topic = req.query.main_topic;
+        if (req.query.sub_topic) filters.sub_topic = req.query.sub_topic;
+        if (req.query.test_type) filters.test_type = req.query.test_type;
+        if (req.query.difficulty) filters.difficulty = req.query.difficulty;
+        if (req.query.status) filters.status = req.query.status;
+
+        const tests = await testService.getAllTests(filters);
+        
+        console.log(`📋 User ${req.user._id} requested ${tests.length} of their tests`);
+        res.json(tests);
+    } catch (error) {
+        console.error('❌ Error fetching user tests:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
 const getAllMultipleChoicesTests = async (req, res) => {
     try {
         const tests = await testService.getAllMultipleChoicesTests();
@@ -214,6 +236,7 @@ const getAllVocabulariesSubTopicsByMainTopic = async (req, res) => {
 module.exports = {
     createTest,
     getAllTests,
+    getMyTests,
     getAllMultipleChoicesTests,
     getAllGrammarsTests,
     getAllVocabulariesTests,

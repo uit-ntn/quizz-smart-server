@@ -38,8 +38,13 @@ const testSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['active', 'draft', 'archived'],
+        enum: ['active', 'inactive', 'deleted'],
         default: 'active'
+    },
+    visibility: {
+        type: String,
+        enum: ['private', 'public'],
+        default: 'public'
     },
     created_by: {
         type: mongoose.Schema.Types.ObjectId,

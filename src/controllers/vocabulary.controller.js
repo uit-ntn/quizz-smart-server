@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const vocabularyService = require('../services/vocabulary.service');
+const geminiService = require('../services/gemini.service');
 
 // =========================
 // 🟢 Create new vocabulary
@@ -167,6 +168,107 @@ const getAllVocabularySubTopicsByMainTopic = async (req, res) => {
     }
 };
 
+// =========================
+// 🤖 Generate vocabulary using AI
+// =========================
+const generateVocabulary = async (req, res) => {
+    try {
+        const { topic, category, description, count } = req.body;
+
+        // Validate required fields
+        if (!topic) {
+            return res.status(400).json({ 
+                message: 'Topic is required',
+                example: {
+                    topic: "Business Communication",
+                    category: "Professional Skills",
+                    description: "Essential vocabulary for workplace communication",
+                    count: 15
+                }
+            });
+        }
+
+        // Validate count parameter
+        const vocabularyCount = parseInt(count) || 10;
+        if (vocabularyCount < 1 || vocabularyCount > 50) {
+            return res.status(400).json({ 
+                message: 'Count must be between 1 and 50' 
+            });
+        }
+
+        console.log(`🤖 Generating vocabulary request:`, {
+            topic,
+            category: category || 'General',
+            description: description || 'Common vocabulary',
+            count: vocabularyCount,
+            userId: req.user?._id
+        });
+
+        // Generate vocabulary using Gemini AI
+        const vocabularyList = await geminiService.generateVocabulary({
+            topic,
+            category,
+            description,
+            count: vocabularyCount
+        });
+
+        // Add metadata to response
+        const response = {
+            success: true,
+            message: `Generated ${vocabularyList.length} vocabulary words for topic: ${topic}`,
+            data: {
+                topic,
+                category: category || 'General',
+                description: description || 'Generated vocabulary',
+                count: vocabularyList.length,
+                vocabulary: vocabularyList,
+                generated_at: new Date().toISOString(),
+                generated_by: req.user?._id || 'anonymous'
+            }
+        };
+
+        console.log(`✅ Successfully generated ${vocabularyList.length} vocabulary words`);
+        res.status(200).json(response);
+
+    } catch (error) {
+        console.error('❌ Error generating vocabulary:', error);
+        
+        // Return user-friendly error message
+        const errorResponse = {
+            success: false,
+            message: 'Failed to generate vocabulary',
+            error: error.message,
+            suggestion: 'Please try again with a more specific topic or check your API configuration'
+        };
+
+        res.status(500).json(errorResponse);
+    }
+};
+
+// =========================
+// 🤖 Test Gemini AI connection
+// =========================
+const testGeminiConnection = async (req, res) => {
+    try {
+        const result = await geminiService.testConnection();
+        const usageInfo = geminiService.getUsageInfo();
+
+        res.status(200).json({
+            message: 'Gemini AI Service Status',
+            connection: result,
+            configuration: usageInfo,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('❌ Error testing Gemini connection:', error);
+        res.status(500).json({
+            message: 'Failed to test Gemini connection',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     createVocabulary,
     getAllVocabularies,
@@ -174,5 +276,9 @@ module.exports = {
     getVocabularyById,
     updateVocabulary,
     deleteVocabulary,
-    searchVocabularies
+    searchVocabularies,
+    getAllVocabularyMainTopics,
+    getAllVocabularySubTopicsByMainTopic,
+    generateVocabulary,
+    testGeminiConnection
 };

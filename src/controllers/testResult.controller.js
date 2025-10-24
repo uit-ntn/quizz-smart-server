@@ -5,7 +5,9 @@ const createTestResult = async (req, res) => {
     try {
         const result = await testResultService.createTestResult({
             ...req.body,
-            user_id: req.user._id
+            user_id: req.user._id,
+            ip_address: req.ip,
+            device_info: req.get('User-Agent')
         });
         res.status(201).json(result);
     } catch (error) {
@@ -19,6 +21,7 @@ const getAllTestResults = async (req, res) => {
         const filters = {};
         if (req.query.test_id) filters.test_id = req.query.test_id;
         if (req.query.user_id) filters.user_id = req.query.user_id;
+        if (req.query.status) filters.status = req.query.status;
 
         const results = await testResultService.getAllTestResults(filters);
         res.json(results);
@@ -27,10 +30,65 @@ const getAllTestResults = async (req, res) => {
     }
 };
 
-const getAllTestResultsByUserId= async (req, res) => {
-    return await TestResult.find({ user_id: userId })
-        .populate('test_id', 'test_title main_topic sub_topic')
-        .sort({ created_at: -1 });
+// Update test result
+const updateTestResult = async (req, res) => {
+    try {
+        const result = await testResultService.getTestResultById(req.params.id);
+        if (!result) {
+            return res.status(404).json({ message: 'Test result not found' });
+        }
+        
+        // Check if user owns this result or is admin
+        if (result.user_id._id.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
+        const updatedResult = await testResultService.updateTestResult(req.params.id, req.body);
+        res.json(updatedResult);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+// Update status by ID
+const updateStatusById = async (req, res) => {
+    try {
+        const { status } = req.body;
+        const validStatuses = ['draft', 'active', 'deleted'];
+        
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ message: 'Invalid status' });
+        }
+
+        const result = await testResultService.updateStatusById(req.params.id, status);
+        if (!result) {
+            return res.status(404).json({ message: 'Test result not found' });
+        }
+        
+        res.json(result);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+// Update status by test ID
+const updateStatusByTestId = async (req, res) => {
+    try {
+        const { status } = req.body;
+        const validStatuses = ['draft', 'active', 'deleted'];
+        
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ message: 'Invalid status' });
+        }
+
+        const result = await testResultService.updateStatusByTestId(req.params.testId, status);
+        res.json({ 
+            message: 'Test results status updated successfully',
+            modifiedCount: result.modifiedCount 
+        });
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
 };
 
 // Get test result by ID
@@ -92,10 +150,10 @@ const getUserStatistics = async (req, res) => {
     }
 };
 
-// Delete test result
-const deleteTestResult = async (req, res) => {
+// Soft delete test result
+const softDeleteTestResult = async (req, res) => {
     try {
-        const result = await testResultService.deleteTestResult(req.params.id);
+        const result = await testResultService.softDeleteTestResult(req.params.id);
         if (!result) {
             return res.status(404).json({ message: 'Test result not found' });
         }
@@ -105,14 +163,47 @@ const deleteTestResult = async (req, res) => {
     }
 };
 
+// Hard delete test result (admin only)
+const hardDeleteTestResult = async (req, res) => {
+    try {
+        const result = await testResultService.hardDeleteTestResult(req.params.id);
+        if (!result) {
+            return res.status(404).json({ message: 'Test result not found' });
+        }
+        res.json({ message: 'Test result permanently deleted' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Restore deleted test result (admin only)
+const restoreTestResult = async (req, res) => {
+    try {
+        const result = await testResultService.restoreTestResult(req.params.id);
+        if (!result) {
+            return res.status(404).json({ message: 'Deleted test result not found' });
+        }
+        res.json({ 
+            message: 'Test result restored successfully',
+            result 
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     createTestResult,
     getAllTestResults,
+    updateTestResult,
+    updateStatusById,
+    updateStatusByTestId,
     getTestResultById,
     getMyTestResults,
     getTestResultsByTest,
     getMyStatistics,
     getUserStatistics,
-    deleteTestResult,
-    getAllTestResultsByUserId
+    softDeleteTestResult,
+    hardDeleteTestResult,
+    restoreTestResult
 };
