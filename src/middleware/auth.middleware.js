@@ -67,4 +67,40 @@ const authorize = (...roles) => {
     };
 };
 
-module.exports = { authMiddleware, authorize };
+// Optional auth middleware - attaches user if token exists and valid, but doesn't fail if no token
+const optionalAuthMiddleware = async (req, res, next) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1];
+        
+        if (!token) {
+            // No token provided, continue without user
+            req.user = null;
+            return next();
+        }
+
+        // Verify JWT token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Nhan123456');
+        
+        // Get user from database
+        const user = await User.findById(decoded.userId);
+        if (!user) {
+            req.user = null;
+            return next();
+        }
+
+        // Check if user email is verified (for local auth only)
+        if (user.authProvider === 'local' && !user.email_verified) {
+            req.user = null;
+            return next();
+        }
+
+        req.user = user;
+        next();
+    } catch (error) {
+        // Token invalid, continue without user
+        req.user = null;
+        next();
+    }
+};
+
+module.exports = { authMiddleware, authorize, optionalAuthMiddleware };

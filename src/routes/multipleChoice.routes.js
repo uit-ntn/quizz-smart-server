@@ -3,14 +3,30 @@ const router = express.Router();
 const multipleChoiceController = require('../controllers/multipleChoice.controller');
 const { authMiddleware, authorize } = require('../middleware/auth.middleware');
 
-router.get('/', multipleChoiceController.getAllMultipleChoices);
-router.get('/main-topics', multipleChoiceController.getAllMultipleChoicesMainTopics);
-router.get('/sub-topics/:mainTopic', multipleChoiceController.getAllMultipleChoicesSubTopicsByMainTopic);
-router.get('/test/:testId', multipleChoiceController.getAllMultipleChoicesByTestId);
-router.get('/:id', multipleChoiceController.getMultipleChoiceById);
-router.post('/', multipleChoiceController.createMultipleChoice);
-router.put('/:id', multipleChoiceController.updateMultipleChoice);
-router.delete('/:id', multipleChoiceController.deleteMultipleChoice);
+// Optional auth middleware - allows both authenticated and unauthenticated access
+const optionalAuth = (req, res, next) => {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (token) {
+        // If token provided, validate it using authMiddleware
+        authMiddleware(req, res, next);
+    } else {
+        // If no token, continue without user info
+        req.user = null;
+        next();
+    }
+};
+
+// Public routes (optional authentication)
+router.get('/', optionalAuth, multipleChoiceController.getAllMultipleChoices);
+router.get('/main-topics', optionalAuth, multipleChoiceController.getAllMultipleChoicesMainTopics);
+router.get('/sub-topics/:mainTopic', optionalAuth, multipleChoiceController.getAllMultipleChoicesSubTopicsByMainTopic);
+router.get('/test/:testId', optionalAuth, multipleChoiceController.getAllMultipleChoicesByTestId);
+router.get('/:id', optionalAuth, multipleChoiceController.getMultipleChoiceById);
+
+// Protected routes (require authentication)
+router.post('/', authMiddleware, authorize(['admin', 'teacher']), multipleChoiceController.createMultipleChoice);
+router.put('/:id', authMiddleware, authorize(['admin', 'teacher']), multipleChoiceController.updateMultipleChoice);
+router.delete('/:id', authMiddleware, authorize(['admin', 'teacher']), multipleChoiceController.deleteMultipleChoice);
 
 module.exports = router;
 

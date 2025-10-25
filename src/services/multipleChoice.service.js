@@ -1,67 +1,326 @@
 const MultipleChoice = require('../models/MultipleChoice');
 const mongoose = require('mongoose');
 
+// Custom error class for service errors
+class ServiceError extends Error {
+    constructor(message, statusCode = 500, type = 'INTERNAL_ERROR') {
+        super(message);
+        this.statusCode = statusCode;
+        this.type = type;
+        this.name = 'ServiceError';
+    }
+}
+
 // Create new multiple choice question
 const createMultipleChoice = async (questionData) => {
     try {
+        // Validate required fields
+        if (!questionData.question_text || !questionData.options || !questionData.correct_answers) {
+            throw new ServiceError('Missing required fields: question_text, options, and correct_answers are required', 400, 'VALIDATION_ERROR');
+        }
+
+        // Validate test_id if provided
+        if (questionData.test_id && !mongoose.Types.ObjectId.isValid(questionData.test_id)) {
+            throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
+        }
+
+        // Validate question_text is string
+        if (typeof questionData.question_text !== 'string' || questionData.question_text.trim().length === 0) {
+            throw new ServiceError('Question text must be a non-empty string', 400, 'VALIDATION_ERROR');
+        }
+
+        // Validate options is array and has at least 2 options
+        if (!Array.isArray(questionData.options) || questionData.options.length < 2) {
+            throw new ServiceError('Options must be an array with at least 2 choices', 400, 'VALIDATION_ERROR');
+        }
+
+        // Validate correct_answers is array and not empty
+        if (!Array.isArray(questionData.correct_answers) || questionData.correct_answers.length === 0) {
+            throw new ServiceError('Correct answers must be a non-empty array', 400, 'VALIDATION_ERROR');
+        }
+
         const question = new MultipleChoice(questionData);
         return await question.save();
     } catch (error) {
-        throw error;
+        if (error instanceof ServiceError) {
+            throw error;
+        }
+        
+        // Handle mongoose validation errors
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(err => err.message);
+            throw new ServiceError(`Validation failed: ${messages.join(', ')}`, 400, 'VALIDATION_ERROR');
+        }
+        
+        // Handle mongoose duplicate key error
+        if (error.code === 11000) {
+            throw new ServiceError('Multiple choice question with this combination already exists', 409, 'DUPLICATE_ERROR');
+        }
+        
+        throw new ServiceError('Failed to create multiple choice question', 500, 'DATABASE_ERROR');
     }
 };
 
-// Get all multiple choice questions with optional filters
-const getAllMultipleChoices = async (filters = {}) => {
+// Get all multiple choice questions with optional filters (admin thấy tất cả kể cả deleted, user chỉ thấy public và của mình)
+const getAllMultipleChoices = async (filters = {}, userId = null, userRole = null) => {
     try {
-        return await MultipleChoice.find(filters);
+        // Validate filters if provided
+        if (filters.test_id && !mongoose.Types.ObjectId.isValid(filters.test_id)) {
+            throw new ServiceError('Invalid test ID in filters', 400, 'VALIDATION_ERROR');
+        }
+
+        let query = {
+            status: { $in: ['active', 'inactive', 'deleted'] },
+            ...filters
+        };
+
+        // Apply visibility logic
+        if (userRole !== 'admin' && userId) {
+            query.$or = [
+                { visibility: 'public' },
+                { created_by: userId }
+            ];
+        } else if (!userId) {
+            query.visibility = 'public';
+        }
+
+        return await MultipleChoice.find(query)
+            .populate('created_by', 'username full_name')
+            .populate('updated_by', 'username full_name')
+            .sort({ created_at: -1 });
     } catch (error) {
-        throw error;
+        if (error instanceof ServiceError) {
+            throw error;
+        }
+        
+        if (error.name === 'CastError') {
+            throw new ServiceError('Invalid filter parameters provided', 400, 'VALIDATION_ERROR');
+        }
+        
+        throw new ServiceError('Failed to fetch multiple choice questions', 500, 'DATABASE_ERROR');
     }
 };
 
-// Get all multiple choice main topics
-const getAllMultipleChoicesMainTopics = async () => {
-    return await MultipleChoice.distinct('main_topic');
-};
-
-// Get all multiple choice sub topics
-const getAllMultipleChoicesSubTopicsByMainTopic = async (mainTopic) => {
-    return await MultipleChoice.distinct('sub_topic', { main_topic: mainTopic });
-};
-
-const getAllMultipleChoicesByTestId = async (testId) => {
-    return await MultipleChoice.find({ test_id: new mongoose.Types.ObjectId(testId) });
-};
-
-// Get multiple choice question by ID
-const getMultipleChoiceById = async (id) => {
+// Get all multiple choice main topics (admin thấy tất cả, user chỉ thấy public và của mình)
+const getAllMultipleChoicesMainTopics = async (userId = null, userRole = null) => {
     try {
-        return await MultipleChoice.findById(id)
+        let query = {
+            status: { $in: ['active', 'inactive', 'deleted'] }
+        };
+
+        // Apply visibility logic
+        if (userRole !== 'admin' && userId) {
+            query.$or = [
+                { visibility: 'public' },
+                { created_by: userId }
+            ];
+        } else if (!userId) {
+            query.visibility = 'public';
+        }
+
+        return await MultipleChoice.distinct('main_topic', query);
     } catch (error) {
-        throw error;
+        throw new ServiceError('Failed to fetch multiple choice main topics', 500, 'DATABASE_ERROR');
+    }
+};
+
+// Get all multiple choice sub topics (admin thấy tất cả, user chỉ thấy public và của mình)
+const getAllMultipleChoicesSubTopicsByMainTopic = async (mainTopic, userId = null, userRole = null) => {
+    try {
+        // Validate main topic
+        if (!mainTopic || typeof mainTopic !== 'string' || mainTopic.trim().length === 0) {
+            throw new ServiceError('Main topic is required and must be a non-empty string', 400, 'VALIDATION_ERROR');
+        }
+
+        let query = {
+            main_topic: mainTopic.trim(),
+            status: { $in: ['active', 'inactive', 'deleted'] }
+        };
+
+        // Apply visibility logic
+        if (userRole !== 'admin' && userId) {
+            query.$or = [
+                { visibility: 'public' },
+                { created_by: userId }
+            ];
+        } else if (!userId) {
+            query.visibility = 'public';
+        }
+
+        return await MultipleChoice.distinct('sub_topic', query);
+    } catch (error) {
+        if (error instanceof ServiceError) {
+            throw error;
+        }
+        
+        throw new ServiceError('Failed to fetch multiple choice sub topics', 500, 'DATABASE_ERROR');
+    }
+};
+
+// Get all multiple choice questions by test ID (admin thấy tất cả, user chỉ thấy public và của mình)
+const getAllMultipleChoicesByTestId = async (testId, userId = null, userRole = null) => {
+    try {
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(testId)) {
+            throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
+        }
+
+        let query = {
+            test_id: new mongoose.Types.ObjectId(testId),
+            status: { $in: ['active', 'inactive', 'deleted'] }
+        };
+
+        // Apply visibility logic
+        if (userRole !== 'admin' && userId) {
+            query.$or = [
+                { visibility: 'public' },
+                { created_by: userId }
+            ];
+        } else if (!userId) {
+            query.visibility = 'public';
+        }
+
+        return await MultipleChoice.find(query)
+            .populate('created_by', 'username full_name')
+            .populate('updated_by', 'username full_name')
+            .sort({ created_at: -1 });
+    } catch (error) {
+        if (error instanceof ServiceError) {
+            throw error;
+        }
+        
+        if (error.name === 'CastError') {
+            throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
+        }
+        
+        throw new ServiceError('Failed to fetch multiple choice questions by test ID', 500, 'DATABASE_ERROR');
+    }
+};
+
+// Get multiple choice question by ID (admin thấy tất cả, user chỉ thấy public và của mình)
+const getMultipleChoiceById = async (id, userId = null, userRole = null) => {
+    try {
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            throw new ServiceError('Invalid multiple choice question ID format', 400, 'VALIDATION_ERROR');
+        }
+
+        const question = await MultipleChoice.findById(id)
+            .populate('created_by', 'username full_name')
+            .populate('updated_by', 'username full_name');
+
+        if (!question || !['active', 'inactive', 'deleted'].includes(question.status)) {
+            throw new ServiceError('Multiple choice question not found', 404, 'NOT_FOUND');
+        }
+
+        // Check visibility permissions
+        if (question.visibility === 'private') {
+            // Only admin or creator can access private questions
+            if (userRole !== 'admin' && question.created_by._id.toString() !== userId?.toString()) {
+                throw new ServiceError('Access denied to private question', 403, 'ACCESS_DENIED');
+            }
+        }
+
+        return question;
+    } catch (error) {
+        if (error instanceof ServiceError) {
+            throw error;
+        }
+        
+        if (error.name === 'CastError') {
+            throw new ServiceError('Invalid multiple choice question ID format', 400, 'VALIDATION_ERROR');
+        }
+        
+        throw new ServiceError('Failed to fetch multiple choice question', 500, 'DATABASE_ERROR');
     }
 };
 
 // Update multiple choice question
 const updateMultipleChoice = async (id, updateData) => {
     try {
-        return await MultipleChoice.findByIdAndUpdate(
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            throw new ServiceError('Invalid multiple choice question ID format', 400, 'VALIDATION_ERROR');
+        }
+
+        // Validate update data
+        if (updateData.question_text !== undefined) {
+            if (typeof updateData.question_text !== 'string' || updateData.question_text.trim().length === 0) {
+                throw new ServiceError('Question text must be a non-empty string', 400, 'VALIDATION_ERROR');
+            }
+        }
+
+        if (updateData.options !== undefined) {
+            if (!Array.isArray(updateData.options) || updateData.options.length < 2) {
+                throw new ServiceError('Options must be an array with at least 2 choices', 400, 'VALIDATION_ERROR');
+            }
+        }
+
+        if (updateData.correct_answers !== undefined) {
+            if (!Array.isArray(updateData.correct_answers) || updateData.correct_answers.length === 0) {
+                throw new ServiceError('Correct answers must be a non-empty array', 400, 'VALIDATION_ERROR');
+            }
+        }
+
+        if (updateData.test_id && !mongoose.Types.ObjectId.isValid(updateData.test_id)) {
+            throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
+        }
+
+        const updatedQuestion = await MultipleChoice.findByIdAndUpdate(
             id,
             { ...updateData, updated_at: new Date() },
-            { new: true }
-        )
+            { new: true, runValidators: true }
+        ).populate('created_by', 'username full_name')
+         .populate('updated_by', 'username full_name');
+
+        if (!updatedQuestion) {
+            throw new ServiceError('Multiple choice question not found', 404, 'NOT_FOUND');
+        }
+
+        return updatedQuestion;
     } catch (error) {
-        throw error;
+        if (error instanceof ServiceError) {
+            throw error;
+        }
+        
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(err => err.message);
+            throw new ServiceError(`Validation failed: ${messages.join(', ')}`, 400, 'VALIDATION_ERROR');
+        }
+        
+        if (error.name === 'CastError') {
+            throw new ServiceError('Invalid multiple choice question ID format', 400, 'VALIDATION_ERROR');
+        }
+        
+        throw new ServiceError('Failed to update multiple choice question', 500, 'DATABASE_ERROR');
     }
 };
 
 // Delete multiple choice question
 const deleteMultipleChoice = async (id) => {
     try {
-        return await MultipleChoice.findByIdAndDelete(id);
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            throw new ServiceError('Invalid multiple choice question ID format', 400, 'VALIDATION_ERROR');
+        }
+
+        const deletedQuestion = await MultipleChoice.findByIdAndDelete(id);
+        
+        if (!deletedQuestion) {
+            throw new ServiceError('Multiple choice question not found', 404, 'NOT_FOUND');
+        }
+        
+        return deletedQuestion;
     } catch (error) {
-        throw error;
+        if (error instanceof ServiceError) {
+            throw error;
+        }
+        
+        if (error.name === 'CastError') {
+            throw new ServiceError('Invalid multiple choice question ID format', 400, 'VALIDATION_ERROR');
+        }
+        
+        throw new ServiceError('Failed to delete multiple choice question', 500, 'DATABASE_ERROR');
     }
 };
 
@@ -71,5 +330,7 @@ module.exports = {
     getMultipleChoiceById,
     updateMultipleChoice,
     deleteMultipleChoice,
-    getAllMultipleChoicesByTestId
+    getAllMultipleChoicesByTestId,
+    getAllMultipleChoicesMainTopics,
+    getAllMultipleChoicesSubTopicsByMainTopic
 };

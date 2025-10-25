@@ -15,7 +15,7 @@ const getUserById = async (id) => {
 const updateUser = async (id, updateData) => {
     // Don't allow password update through this method
     delete updateData.password;
-    
+
     return await User.findByIdAndUpdate(
         id,
         updateData,
@@ -37,37 +37,24 @@ const updatePassword = async (id, oldPassword, newPassword) => {
 
     user.password = newPassword;
     await user.save();
-    
+
     return { message: 'Password updated successfully' };
 };
 
 // Delete user
-const deleteUser = async (id) => {
+const hardDeleteUser = async (id) => {
     return await User.findByIdAndDelete(id);
 };
 
-// Search users
-const searchUsers = async (searchTerm) => {
-    return await User.find({
-        $or: [
-            { full_name: { $regex: searchTerm, $options: 'i' } },
-            { email: { $regex: searchTerm, $options: 'i' } }
-        ]
-    }).select('-password');
+const softDeleteUser = async (id) => {
+    return await User.findByIdAndUpdate(id, { is_deleted: true });
 };
-
-// Get user profile
-const getUserProfile = async (id) => {
-    return await User.findById(id).select('-password');
-};
-
 
 module.exports = {
     getAllUsers,
     getUserById,
     updateUser,
     updatePassword,
-    deleteUser,
-    searchUsers,
-    getUserProfile
+    hardDeleteUser,
+    softDeleteUser,
 };

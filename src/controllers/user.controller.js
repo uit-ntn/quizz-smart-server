@@ -1,4 +1,6 @@
 const userService = require('../services/user.service');
+const testService = require('../services/test.service');
+const testResultService = require('../services/testResult.service');
 
 // Get all users (admin only)
 const getAllUsers = async (req, res) => {
@@ -29,7 +31,7 @@ const getUserById = async (req, res) => {
 // Get current user profile
 const getProfile = async (req, res) => {
     try {
-        const user = await userService.getUserProfile(req.user.userId);
+        const user = await userService.getUserById(req.user.userId);
         res.json(user);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -70,10 +72,10 @@ const updatePassword = async (req, res) => {
     }
 };
 
-// Delete user
-const deleteUser = async (req, res) => {
+// Soft delete user
+const softDeleteUser = async (req, res) => {
     try {
-        const user = await userService.deleteUser(req.params.id);
+        const user = await userService.softDeleteUser(req.params.id);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -83,20 +85,31 @@ const deleteUser = async (req, res) => {
     }
 };
 
-// Search users
-const searchUsers = async (req, res) => {
+// Hard delete user
+const hardDeleteUser = async (req, res) => {
     try {
-        const { q } = req.query;
-        if (!q) {
-            return res.status(400).json({ message: 'Search term is required' });
+        const user = await userService.hardDeleteUser(req.params.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
         }
-        const users = await userService.searchUsers(q);
-        res.json(users);
+        // Xoá tất cả các test của user
+        const tests = await testService.getTestsByUserId(user._id);
+        for (const test of tests) {
+            await testService.hardDeleteTest(test._id);
+        }
+        // Xoá tất cả các test result của user
+        const testResults = await testResultService.getTestResultsByUserId(user._id);
+        res.json({ message: 'User deleted successfully' });
+        for (const testResult of testResults) {
+            await testResultService.hardDeleteTestResult(testResult._id);
+        }
+        // Xoá user
+        await userService.hardDeleteUser(req.params.id);
+        res.json({ message: 'User deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
-
 
 module.exports = {
     getAllUsers,
@@ -105,6 +118,6 @@ module.exports = {
     updateUser,
     updateProfile,
     updatePassword,
-    deleteUser,
-    searchUsers
+    softDeleteUser,
+    hardDeleteUser,
 };

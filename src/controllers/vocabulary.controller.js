@@ -2,6 +2,25 @@ const mongoose = require('mongoose');
 const vocabularyService = require('../services/vocabulary.service');
 const geminiService = require('../services/gemini.service');
 
+// Helper function to handle service errors
+function handleServiceError(error, res) {
+    if (error.name === 'ServiceError') {
+        return res.status(error.statusCode).json({
+            success: false,
+            message: error.message,
+            type: error.type
+        });
+    }
+    
+    // Default error handling
+    console.error('❌ Unexpected error:', error);
+    return res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        type: 'INTERNAL_ERROR'
+    });
+}
+
 // =========================
 // 🟢 Create new vocabulary
 // =========================
@@ -12,10 +31,13 @@ const createVocabulary = async (req, res) => {
             created_by: req.user?._id,
             updated_by: req.user?._id,
         });
-        res.status(201).json(vocabulary);
+        res.status(201).json({
+            success: true,
+            vocabulary
+        });
     } catch (error) {
         console.error('Error creating vocabulary:', error);
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -25,10 +47,13 @@ const createVocabulary = async (req, res) => {
 const getAllVocabularies = async (req, res) => {
     try {
         const vocabularies = await vocabularyService.getAllVocabularies();
-        res.status(200).json(vocabularies);
+        res.json({
+            success: true,
+            vocabularies
+        });
     } catch (error) {
         console.error('Error fetching vocabularies:', error);
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -39,15 +64,14 @@ const getAllVocabulariesByTestId = async (req, res) => {
     try {
         const { testId } = req.params;
 
-        if (!mongoose.Types.ObjectId.isValid(testId)) {
-            return res.status(400).json({ message: 'Invalid test ID' });
-        }
-
         const vocabularies = await vocabularyService.getAllVocabulariesByTestId(testId);
-        res.status(200).json(vocabularies);
+        res.json({
+            success: true,
+            vocabularies
+        });
     } catch (error) {
         console.error('Error fetching vocabularies by test ID:', error);
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -58,18 +82,14 @@ const getVocabularyById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ message: 'Invalid vocabulary ID' });
-        }
-
         const vocabulary = await vocabularyService.getVocabularyById(id);
-        if (!vocabulary) {
-            return res.status(404).json({ message: 'Vocabulary not found' });
-        }
-        res.status(200).json(vocabulary);
+        res.json({
+            success: true,
+            vocabulary
+        });
     } catch (error) {
         console.error('Error fetching vocabulary by ID:', error);
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -80,23 +100,18 @@ const updateVocabulary = async (req, res) => {
     try {
         const { id } = req.params;
 
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ message: 'Invalid vocabulary ID' });
-        }
-
         const updated = await vocabularyService.updateVocabulary(id, {
             ...req.body,
             updated_by: req.user?._id,
         });
 
-        if (!updated) {
-            return res.status(404).json({ message: 'Vocabulary not found' });
-        }
-
-        res.status(200).json(updated);
+        res.json({
+            success: true,
+            vocabulary: updated
+        });
     } catch (error) {
         console.error('Error updating vocabulary:', error);
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -107,19 +122,16 @@ const deleteVocabulary = async (req, res) => {
     try {
         const { id } = req.params;
 
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ message: 'Invalid vocabulary ID' });
-        }
-
         const deleted = await vocabularyService.deleteVocabulary(id);
-        if (!deleted) {
-            return res.status(404).json({ message: 'Vocabulary not found' });
-        }
-
-        res.status(200).json({ message: 'Vocabulary deleted successfully' });
+        
+        res.json({ 
+            success: true,
+            message: 'Vocabulary deleted successfully',
+            vocabulary: deleted
+        });
     } catch (error) {
         console.error('Error deleting vocabulary:', error);
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -129,15 +141,14 @@ const deleteVocabulary = async (req, res) => {
 const searchVocabularies = async (req, res) => {
     try {
         const { q } = req.query;
-        if (!q) {
-            return res.status(400).json({ message: 'Search term is required' });
-        }
-
         const vocabularies = await vocabularyService.searchVocabularies(q);
-        res.status(200).json(vocabularies);
+        res.json({
+            success: true,
+            vocabularies
+        });
     } catch (error) {
         console.error('Error searching vocabularies:', error);
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -241,7 +252,7 @@ const generateVocabulary = async (req, res) => {
             suggestion: 'Please try again with a more specific topic or check your API configuration'
         };
 
-        res.status(500).json(errorResponse);
+        return handleServiceError(error, res);
     }
 };
 
@@ -262,10 +273,7 @@ const testGeminiConnection = async (req, res) => {
 
     } catch (error) {
         console.error('❌ Error testing Gemini connection:', error);
-        res.status(500).json({
-            message: 'Failed to test Gemini connection',
-            error: error.message
-        });
+        return handleServiceError(error, res);
     }
 };
 

@@ -1,5 +1,24 @@
 const testService = require('../services/test.service');
 
+// Helper function to handle service errors
+function handleServiceError(error, res) {
+    if (error.name === 'ServiceError') {
+        return res.status(error.statusCode).json({
+            success: false,
+            message: error.message,
+            type: error.type
+        });
+    }
+    
+    // Default error handling
+    console.error('❌ Unexpected error:', error);
+    return res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        type: 'INTERNAL_ERROR'
+    });
+}
+
 // Create new test
 const createTest = async (req, res) => {
     try {
@@ -8,9 +27,12 @@ const createTest = async (req, res) => {
             created_by: req.user._id,
             updated_by: req.user._id
         });
-        res.status(201).json(test);
+        res.status(201).json({
+            success: true,
+            ...test
+        });
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -24,10 +46,17 @@ const getAllTests = async (req, res) => {
         if (req.query.difficulty) filters.difficulty = req.query.difficulty;
         if (req.query.status) filters.status = req.query.status;
 
-        const tests = await testService.getAllTests(filters);
-        res.json(tests);
+        // Pass user info to service (admin gets all, others get public only)
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const tests = await testService.getAllTests(filters, userId, userRole);
+        
+        res.json({
+            success: true,
+            ...tests
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -43,40 +72,58 @@ const getMyTests = async (req, res) => {
         if (req.query.difficulty) filters.difficulty = req.query.difficulty;
         if (req.query.status) filters.status = req.query.status;
 
-        const tests = await testService.getAllTests(filters);
+        const tests = await testService.getAllTests(filters, req.user._id, req.user.role);
         
-        console.log(`📋 User ${req.user._id} requested ${tests.length} of their tests`);
-        res.json(tests);
+        console.log(`📋 User ${req.user._id} requested ${tests.tests.length} of their tests`);
+        res.json({
+            success: true,
+            ...tests
+        });
     } catch (error) {
         console.error('❌ Error fetching user tests:', error);
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 const getAllMultipleChoicesTests = async (req, res) => {
     try {
-        const tests = await testService.getAllMultipleChoicesTests();
-        res.json(tests);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const tests = await testService.getAllMultipleChoicesTests(userId, userRole);
+        res.json({
+            success: true,
+            tests
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 const getAllGrammarsTests = async (req, res) => {
     try {
-        const tests = await testService.getAllGrammarsTests();
-        res.json(tests);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const tests = await testService.getAllGrammarsTests(userId, userRole);
+        res.json({
+            success: true,
+            tests
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 const getAllVocabulariesTests = async (req, res) => {
     try {
-        const tests = await testService.getAllVocabulariesTests();
-        res.json(tests);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const tests = await testService.getAllVocabulariesTests(userId, userRole);
+        res.json({
+            success: true,
+            tests
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -84,19 +131,34 @@ const getAllVocabulariesTests = async (req, res) => {
 // Get test by ID
 const getTestById = async (req, res) => {
     try {
-        const test = await testService.getTestById(req.params.id);
-        if (!test) {
-            return res.status(404).json({ message: 'Test not found' });
-        }
-        res.json(test);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const test = await testService.getTestById(req.params.id, userId, userRole);
+        
+        res.json({
+            success: true,
+            test
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 // Update test
 const updateTest = async (req, res) => {
     try {
+        // First check if test exists and user has permission
+        const existingTest = await testService.getTestById(req.params.id, req.user._id, req.user.role);
+        
+        // Check if user can edit (admin or creator)
+        if (req.user.role !== 'admin' && existingTest.created_by._id.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ 
+                success: false,
+                message: 'Access denied',
+                type: 'ACCESS_DENIED'
+            });
+        }
+        
         const test = await testService.updateTest(
             req.params.id,
             {
@@ -104,25 +166,39 @@ const updateTest = async (req, res) => {
                 updated_by: req.user._id
             }
         );
-        if (!test) {
-            return res.status(404).json({ message: 'Test not found' });
-        }
-        res.json(test);
+        
+        res.json({
+            success: true,
+            test
+        });
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 // Delete test
 const deleteTest = async (req, res) => {
     try {
-        const test = await testService.deleteTest(req.params.id);
-        if (!test) {
-            return res.status(404).json({ message: 'Test not found' });
+        // First check if test exists and user has permission
+        const existingTest = await testService.getTestById(req.params.id, req.user._id, req.user.role);
+        
+        // Check if user can delete (admin or creator)
+        if (req.user.role !== 'admin' && existingTest.created_by._id.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ 
+                success: false,
+                message: 'Access denied',
+                type: 'ACCESS_DENIED'
+            });
         }
-        res.json({ message: 'Test deleted successfully' });
+        
+        await testService.hardDeleteTest(req.params.id);
+        
+        res.json({ 
+            success: true,
+            message: 'Test deleted successfully' 
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -131,12 +207,23 @@ const searchTests = async (req, res) => {
     try {
         const { q } = req.query;
         if (!q) {
-            return res.status(400).json({ message: 'Search term is required' });
+            return res.status(400).json({ 
+                success: false,
+                message: 'Search term is required',
+                type: 'VALIDATION_ERROR'
+            });
         }
-        const tests = await testService.searchTests(q);
-        res.json(tests);
+        
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const tests = await testService.searchTests(q, userId, userRole);
+        
+        res.json({
+            success: true,
+            tests
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -144,10 +231,16 @@ const searchTests = async (req, res) => {
 const getTestsByTopic = async (req, res) => {
     try {
         const { mainTopic, subTopic } = req.params;
-        const tests = await testService.getTestsByTopic(mainTopic, subTopic);
-        res.json(tests);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const tests = await testService.getTestsByTopic(mainTopic, subTopic, userId, userRole);
+        
+        res.json({
+            success: true,
+            tests
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -155,10 +248,16 @@ const getTestsByTopic = async (req, res) => {
 const getTestsByType = async (req, res) => {
     try {
         const { testType } = req.params;
-        const tests = await testService.getTestsByType(testType);
-        res.json(tests);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const tests = await testService.getTestsByType(testType, userId, userRole);
+        
+        res.json({
+            success: true,
+            tests
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -167,69 +266,94 @@ const getTestsByType = async (req, res) => {
 // Get all multiple choice main topics
 const getAllMultipleChoicesMainTopics = async (req, res) => {
     try {
-        const mainTopics = await testService.getAllMultipleChoicesMainTopics();
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const mainTopics = await testService.getAllMultipleChoicesMainTopics(userId, userRole);
 
-        if (!mainTopics || mainTopics.length === 0) {
-            return res.status(404).json({ message: 'No main topics found for multiple-choice tests' });
-        }
-
-        res.status(200).json(mainTopics);
+        res.json({
+            success: true,
+            mainTopics
+        });
     } catch (error) {
-        console.error('Error fetching multiple-choice main topics:', error);
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 const getAllMultipleChoicesSubTopicsByMainTopic = async (req, res) => {
     try {
         const { mainTopic } = req.params;
-        const subTopics = await testService.getAllMultipleChoicesSubTopicsByMainTopic(mainTopic);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const subTopics = await testService.getAllMultipleChoicesSubTopicsByMainTopic(mainTopic, userId, userRole);
 
-        if (!subTopics || subTopics.length === 0) {
-            return res.status(404).json({ message: 'No subtopics found for this main topic' });
-        }
-
-        res.json(subTopics);
+        res.json({
+            success: true,
+            subTopics
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 const getAllGrammarsMainTopics = async (req, res) => {
     try {
-        const mainTopics = await testService.getAllGrammarsMainTopics();
-        res.status(200).json(mainTopics);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const mainTopics = await testService.getAllGrammarsMainTopics(userId, userRole);
+        
+        res.json({
+            success: true,
+            mainTopics
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 const getAllGrammarsSubTopicsByMainTopic = async (req, res) => {
     try {
         const { mainTopic } = req.params;
-        const subTopics = await testService.getAllGrammarsSubTopicsByMainTopic(mainTopic);
-        res.status(200).json(subTopics);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const subTopics = await testService.getAllGrammarsSubTopicsByMainTopic(mainTopic, userId, userRole);
+        
+        res.json({
+            success: true,
+            subTopics
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 const getAllVocabulariesMainTopics = async (req, res) => {
     try {
-        const mainTopics = await testService.getAllVocabulariesMainTopics();
-        res.status(200).json(mainTopics);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const mainTopics = await testService.getAllVocabulariesMainTopics(userId, userRole);
+        
+        res.json({
+            success: true,
+            mainTopics
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 const getAllVocabulariesSubTopicsByMainTopic = async (req, res) => {
     try {
         const { mainTopic } = req.params;
-        const subTopics = await testService.getAllVocabulariesSubTopicsByMainTopic(mainTopic);
-        res.status(200).json(subTopics);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const subTopics = await testService.getAllVocabulariesSubTopicsByMainTopic(mainTopic, userId, userRole);
+        
+        res.json({
+            success: true,
+            subTopics
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 

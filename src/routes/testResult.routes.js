@@ -17,21 +17,22 @@ router.use(authMiddleware);
  * @swagger
  * /api/test-results:
  *   get:
- *     summary: Get all test results (Admin only)
+ *     summary: Lấy tất cả test results
  *     tags: [Test Results]
+ *     description: >
+ *       Admin: Thấy tất cả test results
+ *       User: Chỉ thấy test results của mình
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: List of all test results
+ *         description: List of accessible test results
  *       401:
  *         description: Unauthorized
- *       403:
- *         description: Forbidden - Admin access required
  *       500:
  *         description: Server error
  */
-router.get('/', authorize('admin'), testResultController.getAllTestResults);
+router.get('/', testResultController.getAllTestResults);
 
 /**
  * @swagger
@@ -73,8 +74,11 @@ router.get('/my-statistics', testResultController.getMyStatistics);
  * @swagger
  * /api/test-results/test/{testId}:
  *   get:
- *     summary: Get test results by test ID
+ *     summary: Lấy test results theo test ID
  *     tags: [Test Results]
+ *     description: >
+ *       Admin: Thấy tất cả test results của test
+ *       User: Chỉ thấy test results của mình trong test đó
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -129,8 +133,10 @@ router.get('/user/:userId/statistics', authorize('admin'), testResultController.
  * @swagger
  * /api/test-results/{id}:
  *   get:
- *     summary: Get test result by ID
+ *     summary: Lấy test result theo ID
  *     tags: [Test Results]
+ *     description: >
+ *       Admin hoặc owner của test result mới thấy được
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -145,6 +151,8 @@ router.get('/user/:userId/statistics', authorize('admin'), testResultController.
  *         description: Test result details
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Access denied
  *       404:
  *         description: Test result not found
  *       500:
@@ -209,8 +217,10 @@ router.post('/', testResultController.createTestResult);
  * @swagger
  * /api/test-results/{id}:
  *   put:
- *     summary: Update test result
+ *     summary: Cập nhật test result
  *     tags: [Test Results]
+ *     description: >
+ *       Admin hoặc owner của test result mới cập nhật được
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -242,7 +252,7 @@ router.post('/', testResultController.createTestResult);
  *       403:
  *         description: Access denied
  *       404:
- *         description: Test result not found
+ *         description: Test result not found or access denied
  *       500:
  *         description: Server error
  */
@@ -334,8 +344,10 @@ router.patch('/test/:testId/status', authorize('admin'), testResultController.up
  * @swagger
  * /api/test-results/{id}:
  *   delete:
- *     summary: Soft delete test result
+ *     summary: Xóa mềm test result
  *     tags: [Test Results]
+ *     description: >
+ *       Admin hoặc owner của test result mới xóa được
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -350,8 +362,10 @@ router.patch('/test/:testId/status', authorize('admin'), testResultController.up
  *         description: Test result deleted successfully
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Access denied
  *       404:
- *         description: Test result not found
+ *         description: Test result not found or access denied
  *       500:
  *         description: Server error
  */
@@ -414,6 +428,9 @@ router.delete('/:id/hard-delete', authorize('admin'), testResultController.hardD
  *         description: Server error
  */
 router.patch('/:id/restore', authorize('admin'), testResultController.restoreTestResult);
+
+
+
 
 module.exports = router;
 

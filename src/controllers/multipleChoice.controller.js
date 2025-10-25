@@ -1,16 +1,38 @@
 const multipleChoiceService = require('../services/multipleChoice.service');
 
+// Helper function to handle service errors
+function handleServiceError(error, res) {
+    if (error.name === 'ServiceError') {
+        return res.status(error.statusCode).json({
+            success: false,
+            message: error.message,
+            type: error.type
+        });
+    }
+    
+    // Default error handling
+    console.error('❌ Unexpected error:', error);
+    return res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        type: 'INTERNAL_ERROR'
+    });
+}
+
 // Create new multiple choice question
 const createMultipleChoice = async (req, res) => {
     try {
         const question = await multipleChoiceService.createMultipleChoice({
             ...req.body,
-            created_by: req.user._id,
-            updated_by: req.user._id
+            created_by: req.user?._id,
+            updated_by: req.user?._id
         });
-        res.status(201).json(question);
+        res.status(201).json({
+            success: true,
+            question
+        });
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -22,76 +44,132 @@ const getAllMultipleChoices = async (req, res) => {
         if (req.query.sub_topic) filters.sub_topic = req.query.sub_topic;
         if (req.query.difficulty) filters.difficulty = req.query.difficulty;
         if (req.query.status) filters.status = req.query.status;
+        if (req.query.test_id) filters.test_id = req.query.test_id;
 
-        const questions = await multipleChoiceService.getAllMultipleChoices(filters);
-        res.json(questions);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const questions = await multipleChoiceService.getAllMultipleChoices(filters, userId, userRole);
+        
+        res.json({
+            success: true,
+            questions,
+            count: questions.length
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 // Get multiple choice question by ID
 const getMultipleChoiceById = async (req, res) => {
     try {
-        const question = await multipleChoiceService.getMultipleChoiceById(req.params.id);
-        if (!question) {
-            return res.status(404).json({ message: 'Question not found' });
-        }
-        res.json(question);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const question = await multipleChoiceService.getMultipleChoiceById(req.params.id, userId, userRole);
+        
+        res.json({
+            success: true,
+            question
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 // Update multiple choice question
 const updateMultipleChoice = async (req, res) => {
     try {
+        // First check if question exists and user has permission
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const existingQuestion = await multipleChoiceService.getMultipleChoiceById(req.params.id, userId, userRole);
+        
+        // Check if user can edit (admin or creator)
+        if (userRole !== 'admin' && existingQuestion.created_by._id.toString() !== userId?.toString()) {
+            return res.status(403).json({ 
+                success: false,
+                message: 'Access denied',
+                type: 'ACCESS_DENIED'
+            });
+        }
+        
         const question = await multipleChoiceService.updateMultipleChoice(
             req.params.id,
             {
                 ...req.body,
-                updated_by: req.user._id
+                updated_by: userId
             }
         );
-        if (!question) {
-            return res.status(404).json({ message: 'Question not found' });
-        }
-        res.json(question);
+        
+        res.json({
+            success: true,
+            question
+        });
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 // Delete multiple choice question
 const deleteMultipleChoice = async (req, res) => {
     try {
-        const question = await multipleChoiceService.deleteMultipleChoice(req.params.id);
-        if (!question) {
-            return res.status(404).json({ message: 'Question not found' });
+        // First check if question exists and user has permission
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const existingQuestion = await multipleChoiceService.getMultipleChoiceById(req.params.id, userId, userRole);
+        
+        // Check if user can delete (admin or creator)
+        if (userRole !== 'admin' && existingQuestion.created_by._id.toString() !== userId?.toString()) {
+            return res.status(403).json({ 
+                success: false,
+                message: 'Access denied',
+                type: 'ACCESS_DENIED'
+            });
         }
-        res.json({ message: 'Question deleted successfully' });
+        
+        const question = await multipleChoiceService.deleteMultipleChoice(req.params.id);
+        
+        res.json({
+            success: true,
+            message: 'Question deleted successfully',
+            question
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 // Get all multiple choice questions by test ID
 const getAllMultipleChoicesByTestId = async (req, res) => {
     try {
-        const questions = await multipleChoiceService.getAllMultipleChoicesByTestId(req.params.testId);
-        res.json(questions);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const questions = await multipleChoiceService.getAllMultipleChoicesByTestId(req.params.testId, userId, userRole);
+        
+        res.json({
+            success: true,
+            questions,
+            count: questions.length
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
 // Get all main topics
 const getAllMultipleChoicesMainTopics = async (req, res) => {
     try {
-        const mainTopics = await multipleChoiceService.getAllMultipleChoicesMainTopics();
-        res.json(mainTopics);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const mainTopics = await multipleChoiceService.getAllMultipleChoicesMainTopics(userId, userRole);
+        
+        res.json({
+            success: true,
+            mainTopics,
+            count: mainTopics.length
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 
@@ -99,10 +177,17 @@ const getAllMultipleChoicesMainTopics = async (req, res) => {
 const getAllMultipleChoicesSubTopicsByMainTopic = async (req, res) => {
     try {
         const { mainTopic } = req.params;
-        const subTopics = await multipleChoiceService.getAllMultipleChoicesSubTopicsByMainTopic(mainTopic);
-        res.json(subTopics);
+        const userId = req.user?._id || null;
+        const userRole = req.user?.role || null;
+        const subTopics = await multipleChoiceService.getAllMultipleChoicesSubTopicsByMainTopic(mainTopic, userId, userRole);
+        
+        res.json({
+            success: true,
+            subTopics,
+            count: subTopics.length
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return handleServiceError(error, res);
     }
 };
 

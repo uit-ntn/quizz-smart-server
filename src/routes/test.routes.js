@@ -1,39 +1,39 @@
 const express = require('express');
 const router = express.Router();
 const testController = require('../controllers/test.controller');
-const { authMiddleware, authorize } = require('../middleware/auth.middleware');
+const { authMiddleware, authorize, optionalAuthMiddleware } = require('../middleware/auth.middleware');
 
-router.get('/multiple-choices', testController.getAllMultipleChoicesTests);
+router.get('/multiple-choices', optionalAuthMiddleware, testController.getAllMultipleChoicesTests);
 
 router.get('/multiple-choices/main-topics', testController.getAllMultipleChoicesMainTopics);
 
 router.get('/multiple-choices/sub-topics/:mainTopic', testController.getAllMultipleChoicesSubTopicsByMainTopic);
 
-router.get('/grammars', testController.getAllGrammarsTests);
+router.get('/grammars', optionalAuthMiddleware, testController.getAllGrammarsTests);
 
-router.get('/vocabularies', testController.getAllVocabulariesTests);
+router.get('/vocabularies', optionalAuthMiddleware, testController.getAllVocabulariesTests);
 
-router.get('/search', testController.searchTests);
+router.get('/search', optionalAuthMiddleware, testController.searchTests);
 
-router.get('/', testController.getAllTests);
+router.get('/', optionalAuthMiddleware, testController.getAllTests);
 
 // Get tests created by current user (requires authentication)
 router.get('/my-tests', authMiddleware, testController.getMyTests);
 
-router.get('/type/:testType', testController.getTestsByType);
+router.get('/type/:testType', optionalAuthMiddleware, testController.getTestsByType);
 
-router.get('/topic/:mainTopic/:subTopic', testController.getTestsByTopic);
+router.get('/topic/:mainTopic/:subTopic', optionalAuthMiddleware, testController.getTestsByTopic);
 
-router.get('/topic/:mainTopic', testController.getTestsByTopic);
+router.get('/topic/:mainTopic', optionalAuthMiddleware, testController.getTestsByTopic);
 
-router.get('/:id', testController.getTestById);
+router.get('/:id', optionalAuthMiddleware, testController.getTestById);
 
 // Allow authenticated users to create tests (for their own vocabulary tests)
 router.post('/', authMiddleware, testController.createTest);
 
-router.put('/:id', authMiddleware, authorize('admin'), testController.updateTest);
+router.put('/:id', authMiddleware, testController.updateTest);
 
-router.delete('/:id', authMiddleware, authorize('admin'), testController.deleteTest);
+router.delete('/:id', authMiddleware, testController.deleteTest);
 
 router.get('/grammars/main-topics', testController.getAllGrammarsMainTopics);
 
@@ -58,9 +58,16 @@ module.exports = router;
  *   get:
  *     summary: Get all tests
  *     tags: [Tests]
+ *     description: >
+ *       Get all tests with visibility filtering:
+ *       - Unauthenticated users: Only public tests
+ *       - Authenticated users (non-admin): Only public tests
+ *       - Admin users: All tests (public + private)
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: List of all tests
+ *         description: List of all accessible tests
  *       500:
  *         description: Server error
  */
@@ -119,7 +126,7 @@ module.exports = router;
  *         name: status
  *         schema:
  *           type: string
- *           enum: [active, inactive, draft]
+ *           enum: [active, inactive, deleted]
  *         description: Filter by status
  *     responses:
  *       200:
@@ -161,6 +168,9 @@ module.exports = router;
  *                   status:
  *                     type: string
  *                     example: "active"
+ *                   visibility:
+ *                     type: string
+ *                     example: "public"
  *                   created_by:
  *                     type: string
  *                     example: "507f1f77bcf86cd799439011"
@@ -250,6 +260,12 @@ module.exports = router;
  *   get:
  *     summary: Get test by ID
  *     tags: [Tests]
+ *     description: >
+ *       Get test details with visibility check:
+ *       - Public tests: Accessible by everyone
+ *       - Private tests: Only accessible by admin or creator
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -261,7 +277,7 @@ module.exports = router;
  *       200:
  *         description: Test details
  *       404:
- *         description: Test not found
+ *         description: Test not found or access denied
  *       500:
  *         description: Server error
  */
@@ -327,10 +343,16 @@ module.exports = router;
  *                 example: 20
  *               status:
  *                 type: string
- *                 enum: [active, inactive, draft]
+ *                 enum: [active, inactive, deleted]
  *                 description: Test status
  *                 default: active
  *                 example: "active"
+ *               visibility:
+ *                 type: string
+ *                 enum: [public, private]
+ *                 description: Test visibility - public tests can be seen by everyone, private tests can only be seen by admin or creator
+ *                 default: public
+ *                 example: "public"
  *           example:
  *             test_title: "Business Vocabulary Test"
  *             description: "Essential vocabulary for business communication"
@@ -341,6 +363,7 @@ module.exports = router;
  *             time_limit_minutes: 15
  *             total_questions: 20
  *             status: "active"
+ *             visibility: "public"
  *     responses:
  *       201:
  *         description: Test created successfully
@@ -379,6 +402,9 @@ module.exports = router;
  *                 status:
  *                   type: string
  *                   example: "active"
+ *                 visibility:
+ *                   type: string
+ *                   example: "public"
  *                 created_by:
  *                   type: string
  *                   example: "507f1f77bcf86cd799439011"
@@ -425,8 +451,9 @@ module.exports = router;
  * @swagger
  * /api/tests/{id}:
  *   put:
- *     summary: Update test (Admin only)
+ *     summary: Update test (Admin or creator only)
  *     tags: [Tests]
+ *     description: Update test - accessible by admin or test creator
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -459,9 +486,9 @@ module.exports = router;
  *       401:
  *         description: Unauthorized
  *       403:
- *         description: Forbidden - Admin access required
+ *         description: Forbidden - Admin or creator access required
  *       404:
- *         description: Test not found
+ *         description: Test not found or access denied
  *       500:
  *         description: Server error
  */
@@ -471,7 +498,8 @@ module.exports = router;
  * @swagger
  * /api/tests/{id}:
  *   delete:
- *     summary: Delete test (Admin only)
+ *     summary: Delete test (Admin or creator only)
+ *     description: Delete test - accessible by admin or test creator
  *     tags: [Tests]
  *     security:
  *       - bearerAuth: []
@@ -488,9 +516,9 @@ module.exports = router;
  *       401:
  *         description: Unauthorized
  *       403:
- *         description: Forbidden - Admin access required
+ *         description: Forbidden - Admin or creator access required
  *       404:
- *         description: Test not found
+ *         description: Test not found or access denied
  *       500:
  *         description: Server error
  */
