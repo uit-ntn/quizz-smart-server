@@ -137,12 +137,10 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
+const host = process.env.HOST || 'localhost'; 
 const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Swagger documentation available at ${PORT}/api-docs`);
+app.listen(PORT, host, () => {
+    console.log(`Server is running on http://${host}:${PORT}`);
+    console.log(`Swagger documentation available at http://${host}:${PORT}/api-docs`);
     console.log("Connected DB:", process.env.MONGODB_URI);
-
-
-
 });

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/user.controller');
-const { authMiddleware, authorize } = require('../middleware/auth.middleware');
+const { authMiddleware, authorize, optionalAuthMiddleware } = require('../middleware/auth.middleware');
 
 /**
  * @swagger

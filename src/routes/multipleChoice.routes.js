@@ -1,34 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multipleChoiceController = require('../controllers/multipleChoice.controller');
-const { authMiddleware, authorize } = require('../middleware/auth.middleware');
-
-// Optional auth middleware - allows both authenticated and unauthenticated access
-const optionalAuth = (req, res, next) => {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (token) {
-        // If token provided, validate it using authMiddleware
-        authMiddleware(req, res, next);
-    } else {
-        // If no token, continue without user info
-        req.user = null;
-        next();
-    }
-};
-
-// Public routes (optional authentication)
-router.get('/', optionalAuth, multipleChoiceController.getAllMultipleChoices);
-router.get('/main-topics', optionalAuth, multipleChoiceController.getAllMultipleChoicesMainTopics);
-router.get('/sub-topics/:mainTopic', optionalAuth, multipleChoiceController.getAllMultipleChoicesSubTopicsByMainTopic);
-router.get('/test/:testId', optionalAuth, multipleChoiceController.getAllMultipleChoicesByTestId);
-router.get('/:id', optionalAuth, multipleChoiceController.getMultipleChoiceById);
-
-// Protected routes (require authentication)
-router.post('/', authMiddleware, authorize(['admin', 'teacher']), multipleChoiceController.createMultipleChoice);
-router.put('/:id', authMiddleware, authorize(['admin', 'teacher']), multipleChoiceController.updateMultipleChoice);
-router.delete('/:id', authMiddleware, authorize(['admin', 'teacher']), multipleChoiceController.deleteMultipleChoice);
-
-module.exports = router;
+const { authMiddleware, authorize, optionalAuthMiddleware } = require('../middleware/auth.middleware');
 
 /**
  * @swagger
@@ -37,226 +10,118 @@ module.exports = router;
  *   description: Multiple choice question management endpoints
  */
 
+// ===== Public (optionalAuth) — để service áp dụng visibility =====
+router.get('/', optionalAuthMiddleware, multipleChoiceController.getAllMultipleChoices);
+router.get('/main-topics', optionalAuthMiddleware, multipleChoiceController.getAllMultipleChoicesMainTopics);
+router.get('/sub-topics/:mainTopic', optionalAuthMiddleware, multipleChoiceController.getAllMultipleChoicesSubTopicsByMainTopic);
+router.get('/test/:testId', optionalAuthMiddleware, multipleChoiceController.getAllMultipleChoicesByTestId);
+router.get('/:id', optionalAuthMiddleware, multipleChoiceController.getMultipleChoiceById);
+
+// ===== Protected (admin/teacher) =====
+router.post('/', authMiddleware, authorize(['admin']), multipleChoiceController.createMultipleChoice);
+router.put('/:id', authMiddleware, authorize(['admin']), multipleChoiceController.updateMultipleChoice);
+router.delete('/:id', authMiddleware, authorize(['admin']), multipleChoiceController.deleteMultipleChoice);
+
+module.exports = router;
+
 /**
  * @swagger
  * /api/multiple-choices:
  *   get:
  *     summary: Get all multiple choice questions
  *     tags: [Multiple Choice]
+ *     parameters:
+ *       - in: query
+ *         name: main_topic
+ *         schema: { type: string }
+ *       - in: query
+ *         name: sub_topic
+ *         schema: { type: string }
+ *       - in: query
+ *         name: difficulty
+ *         schema: { type: string, enum: [easy, medium, hard] }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [active, inactive, deleted] }
+ *       - in: query
+ *         name: test_id
+ *         schema: { type: string }
  *     responses:
- *       200:
- *         description: List of all multiple choice questions
- *       500:
- *         description: Server error
- */
-
-/**
- * @swagger
+ *       200: { description: OK }
+ *       500: { description: Server error }
+ *
  * /api/multiple-choices/main-topics:
  *   get:
  *     summary: Get all main topics
  *     tags: [Multiple Choice]
  *     responses:
- *       200:
- *         description: List of all main topics
- *       500:
- *         description: Server error
- */
-
-
-/**
- * @swagger
+ *       200: { description: OK }
+ *
+ * /api/multiple-choices/sub-topics/{mainTopic}:
+ *   get:
+ *     summary: Get all sub topics by main topic
+ *     tags: [Multiple Choice]
+ *     parameters:
+ *       - in: path
+ *         name: mainTopic
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: OK }
+ *
+ * /api/multiple-choices/test/{testId}:
+ *   get:
+ *     summary: Get all questions by test ID
+ *     tags: [Multiple Choice]
+ *     parameters:
+ *       - in: path
+ *         name: testId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: OK }
+ *
+ * /api/multiple-choices/{id}:
+ *   get:
+ *     summary: Get question by ID
+ *     tags: [Multiple Choice]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: OK }
+ *
+ *   put:
+ *     summary: Update question (Admin/Teacher)
+ *     tags: [Multiple Choice]
+ *     security: [ { bearerAuth: [] } ]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Updated }
+ *
+ *   delete:
+ *     summary: Delete question (Admin/Teacher)
+ *     tags: [Multiple Choice]
+ *     security: [ { bearerAuth: [] } ]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Deleted }
+ *
  * /api/multiple-choices:
  *   post:
- *     summary: Create a new multiple choice question (Admin/Teacher only)
+ *     summary: Create question (Admin/Teacher)
  *     tags: [Multiple Choice]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - main_topic
- *               - sub_topic
- *               - question_text
- *               - options
- *               - correct_answers
- *               - explanation
- *             properties:
- *               main_topic:
- *                 type: string
- *               sub_topic:
- *                 type: string
- *               question_text:
- *                 type: string
- *               options:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     label:
- *                       type: string
- *                     text:
- *                       type: string
- *               correct_answers:
- *                 type: array
- *                 items:
- *                   type: string
- *               explanation:
- *                 type: object
- *                 properties:
- *                   correct:
- *                     type: string
- *                   incorrect_choices:
- *                     type: object
- *               difficulty:
- *                 type: string
- *                 enum: [easy, medium, hard]
- *               tags:
- *                 type: array
- *                 items:
- *                   type: string
- *               status:
- *                 type: string
- *                 enum: [active, inactive]
+ *     security: [ { bearerAuth: [] } ]
  *     responses:
- *       201:
- *         description: Question created successfully
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - Admin/Teacher access required
- *       500:
- *         description: Server error
- */
-
-/**
- * @swagger
- * /api/multiple-choices/{id}:
- *   put:
- *     summary: Update multiple choice question (Admin)
- *     tags: [Multiple Choice]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Question ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               main_topic:
- *                 type: string
- *               sub_topic:
- *                 type: string
- *               question_text:
- *                 type: string
- *               options:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     label:
- *                       type: string
- *                     text:
- *                       type: string
- *               correct_answers:
- *                 type: array
- *                 items:
- *                   type: string
- *               explanation:
- *                 type: object
- *                 properties:
- *                   correct:
- *                     type: string
- *                   incorrect_choices:
- *                     type: object
- *               difficulty:
- *                 type: string
- *                 enum: [easy, medium, hard]
- *               tags:
- *                 type: array
- *                 items:
- *                   type: string
- *               status:
- *                 type: string
- *                 enum: [active, inactive]
- *     responses:
- *       200:
- *         description: Question updated successfully
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - Admin/Teacher access required
- *       404:
- *         description: Question not found
- *       500:
- *         description: Server error
- */
-
-/**
- * @swagger
- * /api/multiple-choices/{id}:
- *   delete:
- *     summary: Delete multiple choice question (Admin/Teacher only)
- *     tags: [Multiple Choice]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Question ID
- *     responses:
- *       200:
- *         description: Question deleted successfully
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - Admin/Teacher access required
- *       404:
- *         description: Question not found
- *       500:
- *         description: Server error
- */
-/*
-*@swagger
-* /api/multiple-choices/test/{testId}:
-*   get:
-*     summary: Get all multiple choice questions by test ID
-*     tags: [Multiple Choice]
-*     parameters:
-*       - in: path
-*         name: testId
-*         required: true
-*         schema:
-*           type: string
-*         description: Test ID
-*     responses:
-*       200:
-*         description: List of all multiple choice questions by test ID
-*       500:
-*         description: Server error
-*/
-
-/**
- * @swagger
- * /api/multiple-choices/test/{testId}:
- *   post:
- *     summary: Create a new multiple choice question by test ID
- *     tags: [Multiple Choice]
- *     security:
- *       - bearerAuth: []
+ *       201: { description: Created }
  */

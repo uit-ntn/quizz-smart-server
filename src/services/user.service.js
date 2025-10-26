@@ -6,6 +6,18 @@ const getAllUsers = async (filters = {}) => {
     return await User.find(query).select('-password');
 };
 
+// Search users
+const searchUsers = async (searchTerm) => {
+    const query = {
+        $or: [
+            { full_name: { $regex: searchTerm, $options: 'i' } },
+            { email: { $regex: searchTerm, $options: 'i' } },
+            { username: { $regex: searchTerm, $options: 'i' } }
+        ]
+    };
+    return await User.find(query).select('-password');
+};
+
 // Get user by ID
 const getUserById = async (id) => {
     return await User.findById(id).select('-password');
@@ -52,6 +64,7 @@ const softDeleteUser = async (id) => {
 
 module.exports = {
     getAllUsers,
+    searchUsers,
     getUserById,
     updateUser,
     updatePassword,

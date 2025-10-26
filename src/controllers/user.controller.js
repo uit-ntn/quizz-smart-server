@@ -15,6 +15,21 @@ const getAllUsers = async (req, res) => {
     }
 };
 
+// Search users (admin only)
+const searchUsers = async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q) {
+            return res.status(400).json({ message: 'Search term is required' });
+        }
+
+        const users = await userService.searchUsers(q);
+        res.json(users);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // Get user by ID
 const getUserById = async (req, res) => {
     try {
@@ -88,21 +103,25 @@ const softDeleteUser = async (req, res) => {
 // Hard delete user
 const hardDeleteUser = async (req, res) => {
     try {
-        const user = await userService.hardDeleteUser(req.params.id);
+        // First get user info before deleting
+        const user = await userService.getUserById(req.params.id);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
+        
         // Xoá tất cả các test của user
-        const tests = await testService.getTestsByUserId(user._id);
+        const testsResponse = await testService.getAllTests({ created_by: user._id }, user._id, 'admin');
+        const tests = testsResponse.tests || [];
         for (const test of tests) {
             await testService.hardDeleteTest(test._id);
         }
-        // Xoá tất cả các test result của user
-        const testResults = await testResultService.getTestResultsByUserId(user._id);
-        res.json({ message: 'User deleted successfully' });
+        
+        // Xoá tất cả các test result của user  
+        const testResults = await testResultService.getTestResultsByUser(user._id);
         for (const testResult of testResults) {
             await testResultService.hardDeleteTestResult(testResult._id);
         }
+        
         // Xoá user
         await userService.hardDeleteUser(req.params.id);
         res.json({ message: 'User deleted successfully' });
@@ -111,13 +130,18 @@ const hardDeleteUser = async (req, res) => {
     }
 };
 
+// Alias for default delete (uses soft delete)
+const deleteUser = softDeleteUser;
+
 module.exports = {
     getAllUsers,
+    searchUsers,
     getUserById,
     getProfile,
     updateUser,
     updateProfile,
     updatePassword,
+    deleteUser,        // Default delete (soft delete)
     softDeleteUser,
     hardDeleteUser,
 };
