@@ -1,168 +1,236 @@
+const mongoose = require('mongoose');
 const Grammar = require('../models/Grammar');
 
-// Create new grammar question
+// Custom error class for service errors
+class ServiceError extends Error {
+  constructor(message, statusCode = 500, type = 'INTERNAL_ERROR') {
+    super(message);
+    this.statusCode = statusCode;
+    this.type = type;
+    this.name = 'ServiceError';
+  }
+}
+
+// Create
 const createGrammar = async (grammarData) => {
-    try {
-        const grammar = new Grammar(grammarData);
-        return await grammar.save();
-    } catch (error) {
-        throw error;
+  try {
+    // Required fields
+    if (!grammarData.question_text || !grammarData.correct_answers || !grammarData.explanation_text) {
+      throw new ServiceError(
+        'Missing required fields: question_text, correct_answers, explanation_text',
+        400,
+        'VALIDATION_ERROR'
+      );
     }
+
+    // Validate test_id if provided
+    if (grammarData.test_id && !mongoose.Types.ObjectId.isValid(grammarData.test_id)) {
+      throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
+    }
+
+    // question_text
+    if (typeof grammarData.question_text !== 'string' || !grammarData.question_text.trim()) {
+      throw new ServiceError('question_text must be a non-empty string', 400, 'VALIDATION_ERROR');
+    }
+
+    // correct_answers
+    if (!Array.isArray(grammarData.correct_answers) || grammarData.correct_answers.length === 0) {
+      throw new ServiceError('correct_answers must be a non-empty array', 400, 'VALIDATION_ERROR');
+    }
+
+    // explanation_text
+    if (typeof grammarData.explanation_text !== 'string' || !grammarData.explanation_text.trim()) {
+      throw new ServiceError('explanation_text must be a non-empty string', 400, 'VALIDATION_ERROR');
+    }
+
+    const grammar = new Grammar(grammarData);
+    return await grammar.save();
+  } catch (error) {
+    if (error instanceof ServiceError) throw error;
+
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map((e) => e.message);
+      throw new ServiceError(`Validation failed: ${messages.join(', ')}`, 400, 'VALIDATION_ERROR');
+    }
+
+    if (error.code === 11000) {
+      throw new ServiceError('Grammar with this combination already exists', 409, 'DUPLICATE_ERROR');
+    }
+
+    throw new ServiceError('Failed to create grammar', 500, 'DATABASE_ERROR');
+  }
 };
 
-// Get all grammar questions with optional filters
-const getAllGrammars = async (filters = {}) => {
-    try {
-        return await Grammar.find();
+// List (admin: all; user: exclude archived by default)
+const getAllGrammars = async (filters = {}, userId = null, userRole = null) => {
+  try {
+    const query = {};
 
-    } catch (error) {
-        throw error;
+    if (filters.test_id) {
+      if (!mongoose.Types.ObjectId.isValid(filters.test_id)) {
+        throw new ServiceError('Invalid test ID in filters', 400, 'VALIDATION_ERROR');
+      }
+      query.test_id = filters.test_id;
     }
-};
+    if (filters.difficulty) query.difficulty = filters.difficulty;
 
-// Get grammar question by ID
-const getGrammarById = async (id) => {
-    try {
-        return await Grammar.findById(id)
-            .populate('created_by', 'username full_name')
-            .populate('updated_by', 'username full_name');
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Get grammar questions by test ID
-const getGrammarByTestId = async (testId) => {
-    try {
-        return await Grammar.find({ test_id: testId });
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Update grammar question
-const updateGrammar = async (id, updateData) => {
-    try {
-        return await Grammar.findByIdAndUpdate(
-            id,
-            { ...updateData, updated_at: new Date() },
-            { new: true }
-        ).populate('created_by', 'username full_name')
-            .populate('updated_by', 'username full_name');
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Delete grammar question
-const deleteGrammar = async (id) => {
-    try {
-        return await Grammar.findByIdAndDelete(id);
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Search grammar questions
-const searchGrammars = async (searchTerm) => {
-    try {
-        return await Grammar.find({
-            $or: [
-                { question_text: { $regex: searchTerm, $options: 'i' } },
-                { main_topic: { $regex: searchTerm, $options: 'i' } },
-                { sub_topic: { $regex: searchTerm, $options: 'i' } },
-                { explanation_text: { $regex: searchTerm, $options: 'i' } }
-            ]
-        }).populate('created_by', 'username full_name')
-            .populate('updated_by', 'username full_name');
-    } catch (error) {
-        throw error;
-    }
-};
-
-// Get questions by topic
-const getQuestionsByTopic = async (mainTopic, subTopic = null) => {
-    try {
-        const query = { main_topic: mainTopic };
-        if (subTopic) {
-            query.sub_topic = subTopic;
+    // status filter logic
+    if (filters.status) {
+      if (userRole === 'admin') {
+        query.status = filters.status;
+      } else {
+        if (filters.status === 'archived') {
+          throw new ServiceError('Access denied: Cannot view archived records', 403, 'ACCESS_DENIED');
         }
-        return await Grammar.find(query)
-            .populate('created_by', 'username full_name')
-            .populate('updated_by', 'username full_name');
-    } catch (error) {
-        throw error;
+        query.status = filters.status;
+      }
+    } else {
+      // default
+      query.status = userRole === 'admin' ? { $in: ['active', 'draft', 'archived'] } : { $ne: 'archived' };
     }
-};
 
-// Get random questions for quiz
-const getRandomQuestions = async (count = 10, filters = {}) => {
-    try {
-        const questions = await Grammar.aggregate([
-            { $match: { status: 'active', ...filters } },
-            { $sample: { size: count } }
-        ]);
-        return questions;
-    } catch (error) {
-        throw error;
+    return await Grammar.find(query)
+      .populate('created_by', 'email full_name')
+      .populate('updated_by', 'email full_name')
+      .sort({ created_at: -1 });
+  } catch (error) {
+    if (error instanceof ServiceError) throw error;
+    if (error.name === 'CastError') {
+      throw new ServiceError('Invalid filter parameters provided', 400, 'VALIDATION_ERROR');
     }
+    throw new ServiceError('Failed to fetch grammars', 500, 'DATABASE_ERROR');
+  }
 };
 
-// Get all grammar topics
-const getAllGrammarTopics = async () => {
-    try {
-        const topics = await Grammar.distinct('main_topic');
-        const topicDetails = await Promise.all(
-            topics.map(async (mainTopic) => {
-                const subTopics = await Grammar.distinct('sub_topic', { main_topic: mainTopic });
-                const count = await Grammar.countDocuments({ main_topic: mainTopic });
-                return {
-                    main_topic: mainTopic,
-                    sub_topics: subTopics,
-                    total_questions: count,
-                    type: 'grammar'
-                };
-            })
-        );
-        return topicDetails;
-    } catch (error) {
-        throw error;
+// By ID (respect status visibility)
+const getGrammarById = async (id, userId = null, userRole = null) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new ServiceError('Invalid grammar ID format', 400, 'VALIDATION_ERROR');
     }
-};
 
-// Get all sub topics
-const getAllSubTopics = async () => {
-    return Grammar.distinct('sub_topic');
-};
+    const grammar = await Grammar.findById(id)
+      .populate('created_by', 'email full_name')
+      .populate('updated_by', 'email full_name');
 
-// Get sub topics by main topic
-const getSubTopicsByMainTopic = async (mainTopic) => {
-    return Grammar.distinct('sub_topic', { main_topic: mainTopic });
-};
+    if (!grammar) throw new ServiceError('Grammar not found', 404, 'NOT_FOUND');
 
-// Get all sub topics, grouped and sorted by main_topic
-const getAllGroupedSubTopics = async () => {
-    const mainTopics = await Grammar.distinct('main_topic');
-    const sortedMainTopics = mainTopics.sort();
-    const result = {};
-    for (let mainTopic of sortedMainTopics) {
-        let subTopics = await Grammar.distinct('sub_topic', { main_topic: mainTopic });
-        result[mainTopic] = subTopics.sort();
+    // Non-admin cannot see archived
+    if (userRole !== 'admin' && grammar.status === 'archived') {
+      throw new ServiceError('Grammar not found or access denied', 404, 'NOT_FOUND');
     }
-    return result;
+
+    return grammar;
+  } catch (error) {
+    if (error instanceof ServiceError) throw error;
+    if (error.name === 'CastError') {
+      throw new ServiceError('Invalid grammar ID format', 400, 'VALIDATION_ERROR');
+    }
+    throw new ServiceError('Failed to fetch grammar', 500, 'DATABASE_ERROR');
+  }
+};
+
+// By testId
+const getAllGrammarsByTestId = async (testId, userId = null, userRole = null) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(testId)) {
+      throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
+    }
+
+    const query = {
+      test_id: new mongoose.Types.ObjectId(testId),
+      status: userRole === 'admin' ? { $in: ['active', 'draft', 'archived'] } : { $ne: 'archived' },
+    };
+
+    return await Grammar.find(query)
+      .populate('created_by', 'email full_name')
+      .populate('updated_by', 'email full_name')
+      .sort({ created_at: -1 });
+  } catch (error) {
+    if (error instanceof ServiceError) throw error;
+    if (error.name === 'CastError') {
+      throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
+    }
+    throw new ServiceError('Failed to fetch grammars by test ID', 500, 'DATABASE_ERROR');
+  }
+};
+
+// Update (admin or creator)
+const updateGrammar = async (id, updateData) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new ServiceError('Invalid grammar ID format', 400, 'VALIDATION_ERROR');
+    }
+
+    if (updateData.test_id && !mongoose.Types.ObjectId.isValid(updateData.test_id)) {
+      throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
+    }
+    if (updateData.question_text !== undefined) {
+      if (typeof updateData.question_text !== 'string' || !updateData.question_text.trim()) {
+        throw new ServiceError('question_text must be a non-empty string', 400, 'VALIDATION_ERROR');
+      }
+    }
+    if (updateData.correct_answers !== undefined) {
+      if (!Array.isArray(updateData.correct_answers) || updateData.correct_answers.length === 0) {
+        throw new ServiceError('correct_answers must be a non-empty array', 400, 'VALIDATION_ERROR');
+      }
+    }
+    if (updateData.explanation_text !== undefined) {
+      if (typeof updateData.explanation_text !== 'string' || !updateData.explanation_text.trim()) {
+        throw new ServiceError('explanation_text must be a non-empty string', 400, 'VALIDATION_ERROR');
+      }
+    }
+    if (updateData.status !== undefined && !['active', 'draft', 'archived'].includes(updateData.status)) {
+      throw new ServiceError('Invalid status value', 400, 'VALIDATION_ERROR');
+    }
+
+    const updated = await Grammar.findByIdAndUpdate(
+      id,
+      { ...updateData, updated_at: new Date() },
+      { new: true, runValidators: true }
+    )
+      .populate('created_by', 'email full_name')
+      .populate('updated_by', 'email full_name');
+
+    if (!updated) throw new ServiceError('Grammar not found', 404, 'NOT_FOUND');
+    return updated;
+  } catch (error) {
+    if (error instanceof ServiceError) throw error;
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map((e) => e.message);
+      throw new ServiceError(`Validation failed: ${messages.join(', ')}`, 400, 'VALIDATION_ERROR');
+    }
+    if (error.name === 'CastError') {
+      throw new ServiceError('Invalid grammar ID format', 400, 'VALIDATION_ERROR');
+    }
+    throw new ServiceError('Failed to update grammar', 500, 'DATABASE_ERROR');
+  }
+};
+
+// Hard delete
+const deleteGrammar = async (id) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new ServiceError('Invalid grammar ID format', 400, 'VALIDATION_ERROR');
+    }
+    const deleted = await Grammar.findByIdAndDelete(id);
+    if (!deleted) throw new ServiceError('Grammar not found', 404, 'NOT_FOUND');
+    return deleted;
+  } catch (error) {
+    if (error instanceof ServiceError) throw error;
+    if (error.name === 'CastError') {
+      throw new ServiceError('Invalid grammar ID format', 400, 'VALIDATION_ERROR');
+    }
+    throw new ServiceError('Failed to delete grammar', 500, 'DATABASE_ERROR');
+  }
 };
 
 module.exports = {
-    createGrammar,
-    getAllGrammars,
-    getGrammarById,
-    updateGrammar,
-    deleteGrammar,
-    searchGrammars,
-    getQuestionsByTopic,
-    getRandomQuestions,
-    getAllGrammarTopics,
-    getAllSubTopics,
-    getSubTopicsByMainTopic,
-    getAllGroupedSubTopics
+  createGrammar,
+  getAllGrammars,
+  getGrammarById,
+  getAllGrammarsByTestId,
+  updateGrammar,
+  deleteGrammar,
+  ServiceError, // optional export if reused
 };

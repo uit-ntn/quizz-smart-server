@@ -1,4 +1,4 @@
-# QuizzSmart Server
+# QuizSmart Server
 
 This project is the backend server for the QuizzSmart application, which manages quizzes, users, and vocabulary entries.
 

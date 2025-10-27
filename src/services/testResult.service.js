@@ -100,7 +100,7 @@ const getAllTestResults = async (filters = {}, userId = null, userRole = null) =
         } else {
             // Nếu không có filter status, apply default logic
             if (userRole === 'admin') {
-                query.status = { $in: ['active', 'deleted'] };
+                query.status = { $in: ['draft', 'active', 'deleted'] }; // Admin thấy tất cả
             } else {
                 query.status = { $ne: 'deleted' }; // User không thấy deleted
             }
