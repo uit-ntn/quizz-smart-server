@@ -111,7 +111,7 @@ app.use('/api/multiple-choices', multipleChoiceRoutes);
 app.use('/api/grammars', grammarRoutes);
 
 // MongoDB connection string
-const MONGODB_URI = 'mongodb+srv://npthanhnhan2003:13012003NTN@cluster0.rjn9pon.mongodb.net/quiz-smart?retryWrites=true&w=majority&appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI;
 
 // Hàm async để connect
 async function connectDB() {

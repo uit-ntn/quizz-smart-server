@@ -35,8 +35,11 @@ router.put('/:id', authMiddleware, testController.updateTest);
 // Soft delete (đánh dấu deleted)
 router.patch('/:id/soft-delete', authMiddleware, testController.softDeleteTest);
 
-// Hard delete (xóa hẳn DB)
-router.delete('/:id', authMiddleware, testController.hardDeleteTest);
+// Hard delete (xóa hẳn DB) - Admin or creator only
+router.delete('/:id/hard-delete', authMiddleware, testController.hardDeleteTest);
+
+// Default delete (soft delete)
+router.delete('/:id', authMiddleware, testController.softDeleteTest);
 
 // ===== Get by ID (đặt cuối để không nuốt các route cụ thể) =====
 router.get('/:id', optionalAuthMiddleware, testController.getTestById);
