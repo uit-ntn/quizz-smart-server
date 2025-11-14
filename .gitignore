@@ -1,0 +1,73 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Environment files
+.env
+.env.*
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Build outputs
+dist/
+build/
+
+# Misc
+coverage/
+coverage-*/
+.cache/
+
+# MongoDB dump
+dump/
+
+# Nodemon
+nodemon.json
+
+# Test output
+test-output/
+
+# Lock files
+pnpm-lock.yaml
+
+# Parcel
+.cache/
+
+# JetBrains
+*.iml
+
+# Local env
+.local
+
+# Ignore the server PID file
+pids/
+*.pid
+*.seed
+
+# VS Code settings
+.vscode/
+
+# Optional: ignore development certificates
+certs/
+
+# Keep .env.example in repo
+!.env.example
