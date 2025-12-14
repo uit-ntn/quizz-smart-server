@@ -24,14 +24,14 @@ function sanitizeFilters(filters = {}, role = null) {
     sub_topic,
     test_type,
     difficulty,
-    status,      // admin có thể dùng; user sẽ bị lọc lại ở visibility
-    visibility,  // admin có thể dùng; user bị override
-    // created_by bị chặn ở controller đối với user thường; ở đây vẫn remove thêm lần nữa
+    status,      // admin có thể dùng
+    visibility,  // admin có thể dùng
   } = filters || {};
 
   const safe = {};
   if (main_topic) safe.main_topic = String(main_topic).trim();
   if (sub_topic) safe.sub_topic = String(sub_topic).trim();
+
   if (test_type && ['multiple_choice', 'grammar', 'vocabulary'].includes(test_type)) {
     safe.test_type = test_type;
   }
@@ -48,7 +48,7 @@ function sanitizeFilters(filters = {}, role = null) {
   return safe;
 }
 
-/** Xây query theo quyền xem */
+/** Xây query theo quyền xem (CHO LIST/DETAIL TEST) */
 function buildVisibilityQuery(baseQuery = {}, userId = null, role = null) {
   // Admin: thấy tất cả (kể cả deleted/private)
   if (role === 'admin') return baseQuery;
@@ -60,12 +60,12 @@ function buildVisibilityQuery(baseQuery = {}, userId = null, role = null) {
         {
           $or: [
             { visibility: 'public', status: { $ne: 'deleted' } },
-            { created_by: userId }
-          ]
+            { created_by: userId },
+          ],
         },
-        { status: { $ne: 'deleted' } }
+        { status: { $ne: 'deleted' } },
       ],
-      ...baseQuery
+      ...baseQuery,
     };
   }
 
@@ -110,15 +110,20 @@ async function createTest(testData) {
     });
 
     if (duplicated) {
-      throw new ServiceError('Test title already exists for this topic & type', 409, 'DUPLICATE_ERROR');
+      throw new ServiceError(
+        'Test title already exists for this topic & type',
+        409,
+        'DUPLICATE_ERROR'
+      );
     }
 
     const saved = await new Test(testData).save();
     return { message: 'Test created successfully', test: saved };
   } catch (err) {
     if (err instanceof ServiceError) throw err;
+
     if (err.name === 'ValidationError') {
-      const msg = Object.values(err.errors).map(e => e.message).join(', ');
+      const msg = Object.values(err.errors).map((e) => e.message).join(', ');
       throw new ServiceError(`Validation failed: ${msg}`, 400, 'VALIDATION_ERROR');
     }
     if (err.code === 11000) {
@@ -132,8 +137,7 @@ async function createTest(testData) {
 async function getAllTests(filters = {}, userId = null, role = null) {
   try {
     const safe = sanitizeFilters(filters, role);
-    // KHÔNG bao giờ nhận created_by từ user thường
-    delete safe.created_by;
+    delete safe.created_by; // không nhận created_by từ user thường
 
     const query = buildVisibilityQuery(safe, userId, role);
 
@@ -155,10 +159,12 @@ async function getAllTests(filters = {}, userId = null, role = null) {
 async function getMyTests(filters = {}, userId) {
   const safe = sanitizeFilters(filters, 'user');
   const query = { ...safe, created_by: userId, status: { $ne: 'deleted' } };
+
   const tests = await Test.find(query)
     .populate('created_by', 'email full_name')
     .populate('updated_by', 'email full_name')
     .sort({ created_at: -1 });
+
   return { message: 'Get my tests successfully', tests };
 }
 
@@ -167,7 +173,9 @@ async function getAllByType(testType, userId = null, role = null) {
   if (!['multiple_choice', 'grammar', 'vocabulary'].includes(testType)) {
     throw new ServiceError('Invalid test type', 400, 'VALIDATION_ERROR');
   }
+
   const query = buildVisibilityQuery({ test_type: testType }, userId, role);
+
   return Test.find(query)
     .populate('created_by', 'email full_name')
     .populate('updated_by', 'email full_name')
@@ -175,8 +183,8 @@ async function getAllByType(testType, userId = null, role = null) {
 }
 
 const getAllMultipleChoicesTests = (userId, role) => getAllByType('multiple_choice', userId, role);
-const getAllGrammarsTests      = (userId, role) => getAllByType('grammar',        userId, role);
-const getAllVocabulariesTests  = (userId, role) => getAllByType('vocabulary',     userId, role);
+const getAllGrammarsTests = (userId, role) => getAllByType('grammar', userId, role);
+const getAllVocabulariesTests = (userId, role) => getAllByType('vocabulary', userId, role);
 
 /** Get by id – kiểm tra quyền với private & deleted */
 async function getTestById(id, userId = null, role = null) {
@@ -212,6 +220,7 @@ async function getTestById(id, userId = null, role = null) {
 async function updateTest(id, updateData) {
   try {
     ensureObjectId(id, 'test ID');
+
     const updated = await Test.findByIdAndUpdate(
       id,
       { ...updateData, updated_at: new Date() },
@@ -219,12 +228,14 @@ async function updateTest(id, updateData) {
     )
       .populate('created_by', 'email full_name')
       .populate('updated_by', 'email full_name');
+
     if (!updated) throw new ServiceError('Test not found', 404, 'NOT_FOUND');
     return updated;
   } catch (err) {
     if (err instanceof ServiceError) throw err;
+
     if (err.name === 'ValidationError') {
-      const msg = Object.values(err.errors).map(e => e.message).join(', ');
+      const msg = Object.values(err.errors).map((e) => e.message).join(', ');
       throw new ServiceError(`Validation failed: ${msg}`, 400, 'VALIDATION_ERROR');
     }
     if (err.name === 'CastError') {
@@ -238,11 +249,13 @@ async function updateTest(id, updateData) {
 async function softDeleteTest(id) {
   try {
     ensureObjectId(id, 'test ID');
+
     const doc = await Test.findByIdAndUpdate(
       id,
       { status: 'deleted', deleted_at: new Date(), updated_at: new Date() },
       { new: true }
     );
+
     if (!doc) throw new ServiceError('Test not found', 404, 'NOT_FOUND');
     return doc;
   } catch (err) {
@@ -251,25 +264,40 @@ async function softDeleteTest(id) {
   }
 }
 
-/** Hard delete + xoá câu hỏi liên quan */
+/** Hard delete + xoá câu hỏi liên quan (✅ transaction + cast ObjectId) */
 async function hardDeleteTest(id) {
+  const session = await mongoose.startSession();
   try {
     ensureObjectId(id, 'test ID');
-    const test = await Test.findById(id);
+    const testObjectId = new mongoose.Types.ObjectId(id);
+
+    session.startTransaction();
+
+    const test = await Test.findById(testObjectId).session(session);
     if (!test) throw new ServiceError('Test not found', 404, 'NOT_FOUND');
 
     if (test.test_type === 'multiple_choice') {
-      await MultipleChoice.deleteMany({ test_id: id });
+      await MultipleChoice.deleteMany({ test_id: testObjectId }).session(session);
     } else if (test.test_type === 'grammar') {
-      await Grammar.deleteMany({ test_id: id });
+      await Grammar.deleteMany({ test_id: testObjectId }).session(session);
     } else if (test.test_type === 'vocabulary') {
-      await Vocabulary.deleteMany({ test_id: id });
+      await Vocabulary.deleteMany({ test_id: testObjectId }).session(session);
     }
-    await Test.findByIdAndDelete(id);
+
+    // Nếu bạn có collection khác liên quan test (TestResult/Attempt/Bookmark...)
+    // thì xoá thêm ở đây:
+    // await TestResult.deleteMany({ test_id: testObjectId }).session(session);
+
+    await Test.deleteOne({ _id: testObjectId }).session(session);
+
+    await session.commitTransaction();
     return { success: true };
   } catch (err) {
+    await session.abortTransaction();
     if (err instanceof ServiceError) throw err;
     throw new ServiceError('Failed to delete test', 500, 'DATABASE_ERROR');
+  } finally {
+    session.endSession();
   }
 }
 
@@ -283,11 +311,11 @@ async function searchTests(searchTerm, userId = null, role = null) {
 
     let query = {
       $or: [
-        { test_title:  { $regex: q, $options: 'i' } },
+        { test_title: { $regex: q, $options: 'i' } },
         { description: { $regex: q, $options: 'i' } },
-        { main_topic:  { $regex: q, $options: 'i' } },
-        { sub_topic:   { $regex: q, $options: 'i' } },
-      ]
+        { main_topic: { $regex: q, $options: 'i' } },
+        { sub_topic: { $regex: q, $options: 'i' } },
+      ],
     };
 
     query = buildVisibilityQuery(query, userId, role);
@@ -302,13 +330,15 @@ async function searchTests(searchTerm, userId = null, role = null) {
   }
 }
 
-/** Topic listing – tôn trọng visibility */
+/** Topic listing – tôn trọng visibility (GIỮ NGUYÊN) */
 async function getTestsByTopic(mainTopic, subTopic = null, userId = null, role = null) {
   if (!mainTopic || !String(mainTopic).trim()) {
     throw new ServiceError('Main topic is required', 400, 'VALIDATION_ERROR');
   }
+
   const base = { main_topic: String(mainTopic).trim() };
   if (subTopic && String(subTopic).trim()) base.sub_topic = String(subTopic).trim();
+
   const query = buildVisibilityQuery(base, userId, role);
 
   return Test.find(query)
@@ -317,43 +347,73 @@ async function getTestsByTopic(mainTopic, subTopic = null, userId = null, role =
     .sort({ created_at: -1 });
 }
 
-/** Distinct main/sub topics – tôn trọng visibility */
+/* =========================================================
+   ✅ Guest/User thấy được mọi main_topic/sub_topic
+   - Không lọc visibility
+   - Vẫn loại deleted
+   - Loại null/'' để tránh topic rỗng
+========================================================= */
 async function distinctTopics({ test_type, field, mainTopic }, userId = null, role = null) {
   if (!['multiple_choice', 'grammar', 'vocabulary'].includes(test_type)) {
     throw new ServiceError('Invalid test type', 400, 'VALIDATION_ERROR');
   }
-  const base = { test_type, status: { $in: ['active', 'inactive', 'deleted'] } };
-  if (field === 'sub_topic' && mainTopic) base.main_topic = String(mainTopic).trim();
+  if (!['main_topic', 'sub_topic'].includes(field)) {
+    throw new ServiceError('Invalid field', 400, 'VALIDATION_ERROR');
+  }
 
-  const q = role === 'admin'
-    ? base
-    : {
-        ...base,
-        $or: userId ? [{ visibility: 'public' }, { created_by: userId }] : [{ visibility: 'public' }]
-      };
+  const base = {
+    test_type,
+    status: { $ne: 'deleted' },
+    [field]: { $nin: [null, ''] },
+  };
 
-  return Test.distinct(field, q);
+  if (field === 'sub_topic' && mainTopic) {
+    base.main_topic = String(mainTopic).trim();
+  }
+
+  // ✅ Không lọc theo userId/role => guest/user thấy toàn bộ topics/subtopics
+  return Test.distinct(field, base);
 }
 
 /* ---------------------- EXPORTS ---------------------- */
 module.exports = {
   ServiceError,
+
+  // CRUD
   createTest,
   getAllTests,
   getMyTests,
-  getAllMultipleChoicesTests,
-  getAllGrammarsTests,
-  getAllVocabulariesTests,
   getTestById,
   updateTest,
   softDeleteTest,
   hardDeleteTest,
+
+  // search & filter
   searchTests,
   getTestsByTopic,
-  getAllMultipleChoicesMainTopics: (uid, role) => distinctTopics({ test_type: 'multiple_choice', field: 'main_topic' }, uid, role),
-  getAllMultipleChoicesSubTopicsByMainTopic: (mainTopic, uid, role) => distinctTopics({ test_type: 'multiple_choice', field: 'sub_topic', mainTopic }, uid, role),
-  getAllGrammarsMainTopics: (uid, role) => distinctTopics({ test_type: 'grammar', field: 'main_topic' }, uid, role),
-  getAllGrammarsSubTopicsByMainTopic: (mainTopic, uid, role) => distinctTopics({ test_type: 'grammar', field: 'sub_topic', mainTopic }, uid, role),
-  getAllVocabulariesMainTopics: (uid, role) => distinctTopics({ test_type: 'vocabulary', field: 'main_topic' }, uid, role),
-  getAllVocabulariesSubTopicsByMainTopic: (mainTopic, uid, role) => distinctTopics({ test_type: 'vocabulary', field: 'sub_topic', mainTopic }, uid, role),
+
+  // type
+  getAllByType,
+  getAllMultipleChoicesTests,
+  getAllGrammarsTests,
+  getAllVocabulariesTests,
+
+  // topics/sub-topics
+  getAllMultipleChoicesMainTopics: (uid, role) =>
+    distinctTopics({ test_type: 'multiple_choice', field: 'main_topic' }, uid, role),
+
+  getAllMultipleChoicesSubTopicsByMainTopic: (mainTopic, uid, role) =>
+    distinctTopics({ test_type: 'multiple_choice', field: 'sub_topic', mainTopic }, uid, role),
+
+  getAllGrammarsMainTopics: (uid, role) =>
+    distinctTopics({ test_type: 'grammar', field: 'main_topic' }, uid, role),
+
+  getAllGrammarsSubTopicsByMainTopic: (mainTopic, uid, role) =>
+    distinctTopics({ test_type: 'grammar', field: 'sub_topic', mainTopic }, uid, role),
+
+  getAllVocabulariesMainTopics: (uid, role) =>
+    distinctTopics({ test_type: 'vocabulary', field: 'main_topic' }, uid, role),
+
+  getAllVocabulariesSubTopicsByMainTopic: (mainTopic, uid, role) =>
+    distinctTopics({ test_type: 'vocabulary', field: 'sub_topic', mainTopic }, uid, role),
 };

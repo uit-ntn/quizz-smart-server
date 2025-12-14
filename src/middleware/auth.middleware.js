@@ -1,106 +1,129 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.warn('⚠️ JWT_SECRET is not set');
+}
+
 const authMiddleware = async (req, res, next) => {
-    try {
-        console.log(`🔐 Auth middleware - ${req.method} ${req.path}`);
-        console.log('📥 Headers:', {
-            authorization: req.headers.authorization ? 'Present' : 'Missing',
-            origin: req.headers.origin,
-            userAgent: req.headers['user-agent']?.substring(0, 50)
-        });
-        
-        // Get token from header
-        const token = req.headers.authorization?.split(' ')[1];
-        
-        if (!token) {
-            console.log('❌ No token provided');
-            return res.status(401).json({ message: 'Authentication required' });
-        }
+  try {
+    // Get token
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.split(' ')[1]
+      : null;
 
-        console.log('🎫 Token received:', token.substring(0, 20) + '...');
-
-        // Verify JWT token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Nhan123456');
-        console.log('🎫 Token decoded:', { userId: decoded.userId, role: decoded.role });
-        
-        // Get user from database
-        const user = await User.findById(decoded.userId);
-        if (!user) {
-            console.log('❌ User not found in database:', decoded.userId);
-            return res.status(401).json({ message: 'Invalid token' });
-        }
-
-        console.log('👤 User found:', { 
-            email: user.email, 
-            authProvider: user.authProvider, 
-            emailVerified: user.email_verified 
-        });
-
-        // Check if user email is verified (for local auth only)
-        if (user.authProvider === 'local' && !user.email_verified) {
-            console.log('❌ Email not verified for local auth user');
-            return res.status(401).json({ message: 'Email not verified' });
-        }
-
-        req.user = user;
-        console.log('✅ Authentication successful for user:', user.email);
-        next();
-    } catch (error) {
-        console.log('❌ Auth middleware error:', error.message);
-        res.status(401).json({ message: 'Invalid token' });
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required',
+        type: 'UNAUTHORIZED'
+      });
     }
+
+    // Verify token
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    if (!decoded?.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token',
+        type: 'UNAUTHORIZED'
+      });
+    }
+
+    // Fetch user
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not found',
+        type: 'UNAUTHORIZED'
+      });
+    }
+
+    // Check email verification for local auth
+    if (user.authProvider === 'local' && !user.email_verified) {
+      return res.status(401).json({
+        success: false,
+        message: 'Email not verified',
+        type: 'EMAIL_NOT_VERIFIED'
+      });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid or expired token',
+      type: 'UNAUTHORIZED'
+    });
+  }
 };
 
-// Authorization middleware for role-based access
-const authorize = (...roles) => {
-    return (req, res, next) => {
-        if (!req.user) {
-            return res.status(401).json({ message: 'Authentication required' });
-        }
-        
-        if (!roles.includes(req.user.role)) {
-            return res.status(403).json({ message: 'Access denied' });
-        }
-        
-        next();
-    };
+// Role-based authorization
+const authorize = (...roles) => (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required',
+      type: 'UNAUTHORIZED'
+    });
+  }
+
+  if (!roles.includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied',
+      type: 'ACCESS_DENIED'
+    });
+  }
+
+  next();
 };
 
-// Optional auth middleware - attaches user if token exists and valid, but doesn't fail if no token
+// Optional auth
 const optionalAuthMiddleware = async (req, res, next) => {
-    try {
-        const token = req.headers.authorization?.split(' ')[1];
-        
-        if (!token) {
-            // No token provided, continue without user
-            req.user = null;
-            return next();
-        }
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.split(' ')[1]
+      : null;
 
-        // Verify JWT token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Nhan123456');
-        
-        // Get user from database
-        const user = await User.findById(decoded.userId);
-        if (!user) {
-            req.user = null;
-            return next();
-        }
-
-        // Check if user email is verified (for local auth only)
-        if (user.authProvider === 'local' && !user.email_verified) {
-            req.user = null;
-            return next();
-        }
-
-        req.user = user;
-        next();
-    } catch (error) {
-        // Token invalid, continue without user
-        req.user = null;
-        next();
+    if (!token) {
+      req.user = null;
+      return next();
     }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded?.userId) {
+      req.user = null;
+      return next();
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      req.user = null;
+      return next();
+    }
+
+    if (user.authProvider === 'local' && !user.email_verified) {
+      req.user = null;
+      return next();
+    }
+
+    req.user = user;
+    next();
+  } catch {
+    req.user = null;
+    next();
+  }
 };
 
-module.exports = { authMiddleware, authorize, optionalAuthMiddleware };
+module.exports = {
+  authMiddleware,
+  authorize,
+  optionalAuthMiddleware
+};

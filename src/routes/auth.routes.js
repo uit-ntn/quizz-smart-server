@@ -349,6 +349,24 @@ router.get('/google/callback', (req, res, next) => {
         'user-agent': req.headers['user-agent'],
         'referer': req.headers.referer
     });
+    
+    // Check for error in query params (Google might return error directly)
+    if (req.query.error) {
+        console.error('❌ Google OAuth Error:', req.query.error);
+        console.error('❌ Error description:', req.query.error_description);
+        return res.redirect(`/api/auth/google/failure?error=${encodeURIComponent(req.query.error)}&error_description=${encodeURIComponent(req.query.error_description || '')}`);
+    }
+    
+    next();
+}, (err, req, res, next) => {
+    // Error handler middleware for passport
+    if (err) {
+        console.error('❌ Passport authentication error:', err);
+        console.error('❌ Error name:', err.name);
+        console.error('❌ Error message:', err.message);
+        console.error('❌ Error stack:', err.stack);
+        return res.redirect(`/api/auth/google/failure?error=${encodeURIComponent(err.name || 'AUTH_ERROR')}&error_description=${encodeURIComponent(err.message || 'Authentication failed')}`);
+    }
     next();
 }, passport.authenticate('google', { 
     failureRedirect: '/api/auth/google/failure',

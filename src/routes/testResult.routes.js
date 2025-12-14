@@ -1,55 +1,70 @@
 const express = require('express');
 const router = express.Router();
-const testResultController = require('../controllers/testResult.controller');
-const { authMiddleware, authorize } = require('../middleware/auth.middleware');
 
-/**
- * @swagger
- * tags:
- *   name: Test Results
- *   description: Test result management endpoints
- */
+const { authMiddleware } = require('../middleware/auth.middleware');
+const controller = require('../controllers/testResult.controller');
 
-// Tất cả endpoint dưới đây yêu cầu đăng nhập
+/* =====================================================
+ * ADMIN ONLY MIDDLEWARE
+ * ===================================================== */
+const adminOnly = (req, res, next) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied: Admin only',
+      type: 'ACCESS_DENIED',
+    });
+  }
+  next();
+};
+
+/* =====================================================
+ * AUTH REQUIRED
+ * ===================================================== */
 router.use(authMiddleware);
 
-// Lấy tất cả (admin thấy all; user chỉ thấy của mình) + hỗ trợ filters: test_id, user_id, status
-router.get('/', testResultController.getAllTestResults);
+/* =====================================================
+ * CREATE + LIST
+ * ===================================================== */
+router.post('/', controller.createTestResult);
+router.get('/', controller.getAllTestResults);
 
-// Kết quả của tôi
-router.get('/my-results', testResultController.getMyTestResults);
+/* =====================================================
+ * MY TEST RESULTS (ACTIVE ONLY)
+ * ===================================================== */
+// user lấy kết quả test active của mình
+router.get('/my-results', controller.getMyTestResults);
 
-// Thống kê của tôi
-router.get('/my-statistics', testResultController.getMyStatistics);
+/* =====================================================
+ * STATISTICS
+ * ===================================================== */
+// user tự xem thống kê của mình
+router.get('/my-statistics', controller.getMyStatistics);
 
-// Kết quả theo test (admin: all; user: chỉ của mình)
-router.get('/test/:testId', testResultController.getTestResultsByTest);
+// admin xem thống kê user bất kỳ
+router.get('/user/:userId/statistics', adminOnly, controller.getUserStatistics);
 
-// Thống kê theo userId (admin only)
-router.get('/user/:userId/statistics', authorize('admin'), testResultController.getUserStatistics);
+/* =====================================================
+ * STATUS
+ * ===================================================== */
+// owner: draft -> active
+// admin: đổi tự do
+router.patch('/:id/status', controller.updateStatusById);
 
-// Lấy chi tiết theo ID (admin/owner)
-router.get('/:id', testResultController.getTestResultById);
+/* =====================================================
+ * RESTORE / HARD DELETE (ADMIN)
+ * ===================================================== */
+router.patch('/:id/restore', adminOnly, controller.restoreTestResult);
+router.delete('/:id/hard-delete', adminOnly, controller.hardDeleteTestResult);
 
-// Tạo mới result (submit)
-router.post('/', testResultController.createTestResult);
+/* =====================================================
+ * READ / UPDATE / SOFT DELETE
+ * ===================================================== */
+router.get('/:id', controller.getTestResultById);
+router.put('/:id', controller.updateTestResult);
+router.delete('/:id', controller.softDeleteTestResult);
 
-// Cập nhật result (admin/owner)
-router.put('/:id', testResultController.updateTestResult);
-
-// Cập nhật status theo ID (admin)
-router.patch('/:id/status', authorize('admin'), testResultController.updateStatusById);
-
-// Cập nhật status theo testId (admin)
-router.patch('/test/:testId/status', authorize('admin'), testResultController.updateStatusByTestId);
-
-// Xoá mềm (admin/owner)
-router.delete('/:id', testResultController.softDeleteTestResult);
-
-// Xoá cứng (admin)
-router.delete('/:id/hard-delete', authorize('admin'), testResultController.hardDeleteTestResult);
-
-// Khôi phục (admin)
-router.patch('/:id/restore', authorize('admin'), testResultController.restoreTestResult);
-
+/* =====================================================
+ * EXPORT
+ * ===================================================== */
 module.exports = router;

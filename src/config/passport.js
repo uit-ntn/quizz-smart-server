@@ -4,9 +4,16 @@ const User = require('../models/User');
 
 // Configure Google OAuth Strategy
 console.log('🔧 Configuring Google OAuth Strategy...');
-console.log('📋 GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? 'Set' : 'Using default');
-console.log('📋 GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'Set' : 'Using default');
+console.log('📋 GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? 'Set' : '❌ NOT SET - This will cause authentication to fail!');
+console.log('📋 GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'Set' : '❌ NOT SET - This will cause authentication to fail!');
 console.log('📋 GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL || "http://localhost:8000/api/auth/google/callback");
+
+// Validate required environment variables
+if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    console.error('❌ WARNING: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set!');
+    console.error('❌ Google OAuth will not work without these credentials.');
+    console.error('❌ Please set them in your .env file or environment variables.');
+}
 
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,

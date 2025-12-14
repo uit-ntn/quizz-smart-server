@@ -1,5 +1,7 @@
+// routes/vocabulary.routes.js
 const express = require('express');
 const router = express.Router();
+
 const vocabularyController = require('../controllers/vocabulary.controller');
 const { authMiddleware, optionalAuthMiddleware } = require('../middleware/auth.middleware');
 

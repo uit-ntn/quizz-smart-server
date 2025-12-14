@@ -16,9 +16,9 @@ router.get('/test/:testId', optionalAuthMiddleware, grammarController.getAllGram
 router.get('/:id', optionalAuthMiddleware, grammarController.getGrammarById);
 
 // ===== Protected (admin/teacher) =====
-router.post('/', authMiddleware, authorize(['admin', 'teacher']), grammarController.createGrammar);
-router.put('/:id', authMiddleware, authorize(['admin', 'teacher']), grammarController.updateGrammar);
-router.delete('/:id', authMiddleware, authorize(['admin', 'teacher']), grammarController.deleteGrammar);
+router.post('/', authMiddleware, authorize(), grammarController.createGrammar);
+router.put('/:id', authMiddleware, authorize(), grammarController.updateGrammar);
+router.delete('/:id', authMiddleware, authorize(), grammarController.deleteGrammar);
 
 module.exports = router;
 

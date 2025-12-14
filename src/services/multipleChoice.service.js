@@ -1,4 +1,5 @@
 const MultipleChoice = require('../models/MultipleChoice');
+const Test = require('../models/Test');
 const mongoose = require('mongoose');
 
 // Custom error class for service errors
@@ -10,6 +11,45 @@ class ServiceError extends Error {
         this.name = 'ServiceError';
     }
 }
+
+/**
+ * ✅ NEW: Check quyền xem TEST (ngăn leak câu hỏi test private)
+ * - Admin: xem tất cả
+ * - Guest: chỉ public + active
+ * - User: public hoặc test của mình
+ */
+const ensureCanAccessTest = async (testId, userId = null, userRole = null) => {
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(testId)) {
+        throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
+    }
+
+    const test = await Test.findById(testId).select('visibility status created_by');
+    if (!test) {
+        throw new ServiceError('Test not found', 404, 'NOT_FOUND');
+    }
+
+    // Admin sees all
+    if (userRole === 'admin') return test;
+
+    // Guest: only public + active
+    if (!userId) {
+        if (test.visibility !== 'public' || test.status !== 'active') {
+            throw new ServiceError('Access denied', 403, 'ACCESS_DENIED');
+        }
+        return test;
+    }
+
+    // Logged in: public OR own test
+    if (
+        test.visibility === 'public' ||
+        test.created_by?.toString() === userId.toString()
+    ) {
+        return test;
+    }
+
+    throw new ServiceError('Access denied', 403, 'ACCESS_DENIED');
+};
 
 // Create new multiple choice question
 const createMultipleChoice = async (questionData) => {
@@ -45,28 +85,34 @@ const createMultipleChoice = async (questionData) => {
         if (error instanceof ServiceError) {
             throw error;
         }
-        
+
         // Handle mongoose validation errors
         if (error.name === 'ValidationError') {
             const messages = Object.values(error.errors).map(err => err.message);
             throw new ServiceError(`Validation failed: ${messages.join(', ')}`, 400, 'VALIDATION_ERROR');
         }
-        
+
         // Handle mongoose duplicate key error
         if (error.code === 11000) {
             throw new ServiceError('Multiple choice question with this combination already exists', 409, 'DUPLICATE_ERROR');
         }
-        
+
         throw new ServiceError('Failed to create multiple choice question', 500, 'DATABASE_ERROR');
     }
 };
 
-// Get all multiple choice questions with optional filters (admin thấy tất cả kể cả deleted, user chỉ thấy public và của mình)
+// Get all multiple choice questions with optional filters
+// ✅ FIX: nếu có test_id thì phải check quyền xem test trước
 const getAllMultipleChoices = async (filters = {}, userId = null, userRole = null) => {
     try {
         // Validate filters if provided
         if (filters.test_id && !mongoose.Types.ObjectId.isValid(filters.test_id)) {
             throw new ServiceError('Invalid test ID in filters', 400, 'VALIDATION_ERROR');
+        }
+
+        // ✅ NEW: nếu filter theo test_id -> check quyền access test
+        if (filters.test_id) {
+            await ensureCanAccessTest(filters.test_id, userId, userRole);
         }
 
         let query = {
@@ -81,22 +127,26 @@ const getAllMultipleChoices = async (filters = {}, userId = null, userRole = nul
         if (error instanceof ServiceError) {
             throw error;
         }
-        
+
         if (error.name === 'CastError') {
             throw new ServiceError('Invalid filter parameters provided', 400, 'VALIDATION_ERROR');
         }
-        
+
         throw new ServiceError('Failed to fetch multiple choice questions', 500, 'DATABASE_ERROR');
     }
 };
 
-// Get all multiple choice questions by test ID (admin thấy tất cả, user chỉ thấy public và của mình)
+// Get all multiple choice questions by test ID
+// ✅ FIX: check quyền truy cập test trước khi trả danh sách câu hỏi
 const getAllMultipleChoicesByTestId = async (testId, userId = null, userRole = null) => {
     try {
         // Validate ObjectId
         if (!mongoose.Types.ObjectId.isValid(testId)) {
             throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
         }
+
+        // ✅ NEW: check quyền access test
+        await ensureCanAccessTest(testId, userId, userRole);
 
         let query = {
             test_id: new mongoose.Types.ObjectId(testId)
@@ -110,16 +160,17 @@ const getAllMultipleChoicesByTestId = async (testId, userId = null, userRole = n
         if (error instanceof ServiceError) {
             throw error;
         }
-        
+
         if (error.name === 'CastError') {
             throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
         }
-        
+
         throw new ServiceError('Failed to fetch multiple choice questions by test ID', 500, 'DATABASE_ERROR');
     }
 };
 
-// Get multiple choice question by ID (admin thấy tất cả, user chỉ thấy public và của mình)
+// Get multiple choice question by ID
+// ✅ FIX: check quyền truy cập test_id của question để tránh đoán id xem lén
 const getMultipleChoiceById = async (id, userId = null, userRole = null) => {
     try {
         // Validate ObjectId
@@ -135,16 +186,21 @@ const getMultipleChoiceById = async (id, userId = null, userRole = null) => {
             throw new ServiceError('Multiple choice question not found', 404, 'NOT_FOUND');
         }
 
+        // ✅ NEW: check quyền access test của câu hỏi
+        if (question.test_id) {
+            await ensureCanAccessTest(question.test_id, userId, userRole);
+        }
+
         return question;
     } catch (error) {
         if (error instanceof ServiceError) {
             throw error;
         }
-        
+
         if (error.name === 'CastError') {
             throw new ServiceError('Invalid multiple choice question ID format', 400, 'VALIDATION_ERROR');
         }
-        
+
         throw new ServiceError('Failed to fetch multiple choice question', 500, 'DATABASE_ERROR');
     }
 };
@@ -196,16 +252,16 @@ const updateMultipleChoice = async (id, updateData) => {
         if (error instanceof ServiceError) {
             throw error;
         }
-        
+
         if (error.name === 'ValidationError') {
             const messages = Object.values(error.errors).map(err => err.message);
             throw new ServiceError(`Validation failed: ${messages.join(', ')}`, 400, 'VALIDATION_ERROR');
         }
-        
+
         if (error.name === 'CastError') {
             throw new ServiceError('Invalid multiple choice question ID format', 400, 'VALIDATION_ERROR');
         }
-        
+
         throw new ServiceError('Failed to update multiple choice question', 500, 'DATABASE_ERROR');
     }
 };
@@ -219,26 +275,27 @@ const deleteMultipleChoice = async (id) => {
         }
 
         const deletedQuestion = await MultipleChoice.findByIdAndDelete(id);
-        
+
         if (!deletedQuestion) {
             throw new ServiceError('Multiple choice question not found', 404, 'NOT_FOUND');
         }
-        
+
         return deletedQuestion;
     } catch (error) {
         if (error instanceof ServiceError) {
             throw error;
         }
-        
+
         if (error.name === 'CastError') {
             throw new ServiceError('Invalid multiple choice question ID format', 400, 'VALIDATION_ERROR');
         }
-        
+
         throw new ServiceError('Failed to delete multiple choice question', 500, 'DATABASE_ERROR');
     }
 };
 
 module.exports = {
+    ServiceError,
     createMultipleChoice,
     getAllMultipleChoices,
     getMultipleChoiceById,

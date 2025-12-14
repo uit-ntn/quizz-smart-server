@@ -93,9 +93,26 @@ const googleAuthFailure = (req, res) => {
     console.log('📊 Request query params:', req.query);
     console.log('📊 Request session:', req.session);
     console.log('📊 Error details:', req.flash ? req.flash() : 'No flash messages');
+    
+    // Log specific error information
+    const error = req.query.error || 'UNKNOWN_ERROR';
+    const errorDescription = req.query.error_description || 'Authentication failed';
+    console.error('❌ Error code:', error);
+    console.error('❌ Error description:', errorDescription);
+    
+    // Check common OAuth errors
+    if (error === 'access_denied') {
+        console.error('❌ User denied access to Google account');
+    } else if (error === 'invalid_request') {
+        console.error('❌ Invalid OAuth request - check Client ID, Secret, and Callback URL');
+    } else if (error === 'unauthorized_client') {
+        console.error('❌ Unauthorized client - Client ID may be incorrect or not authorized');
+    } else if (error === 'invalid_grant') {
+        console.error('❌ Invalid grant - Authorization code may be expired or already used');
+    }
 
     const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const failureURL = `${frontendURL}/auth/failure`;
+    const failureURL = `${frontendURL}/auth/failure?error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(errorDescription)}`;
 
     console.log('↗️ Redirecting to failure URL:', failureURL);
     res.redirect(failureURL);

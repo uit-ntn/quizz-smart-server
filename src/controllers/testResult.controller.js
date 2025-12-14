@@ -1,6 +1,8 @@
 const testResultService = require('../services/testResult.service');
 
-// Chuẩn hoá trả lỗi từ service
+/* =====================================================
+ * ERROR HANDLER
+ * ===================================================== */
 function handleServiceError(error, res) {
   if (error && error.name === 'ServiceError') {
     return res.status(error.statusCode).json({
@@ -9,6 +11,7 @@ function handleServiceError(error, res) {
       type: error.type,
     });
   }
+
   console.error('❌ Unexpected error:', error);
   return res.status(500).json({
     success: false,
@@ -17,15 +20,21 @@ function handleServiceError(error, res) {
   });
 }
 
-// Tạo mới test result (submit)
+/* =====================================================
+ * CREATE
+ * ===================================================== */
 const createTestResult = async (req, res) => {
   try {
-    const result = await testResultService.createTestResult({
-      ...req.body,
-      user_id: req.user._id,
-      ip_address: req.ip,
-      device_info: req.get('User-Agent'),
-    });
+    const result = await testResultService.createTestResult(
+      {
+        ...req.body,
+        user_id: req.user._id,
+        ip_address: req.ip,
+        device_info: req.get('User-Agent'),
+      },
+      req.user.role // Truyền role để kiểm tra quyền tạo với status 'active'
+    );
+
     return res.status(201).json({
       success: true,
       message: 'Test result created successfully',
@@ -36,10 +45,13 @@ const createTestResult = async (req, res) => {
   }
 };
 
-// Lấy tất cả (admin thấy tất cả; user chỉ thấy của mình)
+/* =====================================================
+ * GET ALL (ADMIN / OWNER)
+ * ===================================================== */
 const getAllTestResults = async (req, res) => {
   try {
     const filters = {};
+
     if (req.query.test_id) filters.test_id = req.query.test_id;
     if (req.query.user_id) filters.user_id = req.query.user_id;
     if (req.query.status) filters.status = req.query.status;
@@ -49,6 +61,7 @@ const getAllTestResults = async (req, res) => {
       req.user._id,
       req.user.role
     );
+
     return res.json({
       success: true,
       message: 'Test results fetched successfully',
@@ -60,7 +73,33 @@ const getAllTestResults = async (req, res) => {
   }
 };
 
-// Lấy theo ID (admin/owner)
+/* =====================================================
+ * GET MY TEST RESULTS (ACTIVE ONLY)
+ * ===================================================== */
+const getMyTestResults = async (req, res) => {
+  try {
+    const filters = {};
+    if (req.query.test_id) filters.test_id = req.query.test_id;
+
+    const results = await testResultService.getMyTestResults(
+      req.user._id,
+      filters
+    );
+
+    return res.json({
+      success: true,
+      message: 'My test results fetched successfully',
+      count: results.length,
+      results,
+    });
+  } catch (error) {
+    return handleServiceError(error, res);
+  }
+};
+
+/* =====================================================
+ * GET BY ID
+ * ===================================================== */
 const getTestResultById = async (req, res) => {
   try {
     const result = await testResultService.getTestResultById(
@@ -68,6 +107,7 @@ const getTestResultById = async (req, res) => {
       req.user._id,
       req.user.role
     );
+
     return res.json({
       success: true,
       message: 'Test result fetched successfully',
@@ -78,7 +118,9 @@ const getTestResultById = async (req, res) => {
   }
 };
 
-// Update (admin/owner)
+/* =====================================================
+ * UPDATE (NON-CRITICAL FIELDS)
+ * ===================================================== */
 const updateTestResult = async (req, res) => {
   try {
     const updated = await testResultService.updateTestResult(
@@ -87,6 +129,7 @@ const updateTestResult = async (req, res) => {
       req.user._id,
       req.user.role
     );
+
     return res.json({
       success: true,
       message: 'Test result updated successfully',
@@ -97,14 +140,20 @@ const updateTestResult = async (req, res) => {
   }
 };
 
-// Update status theo ID (admin)
+/* =====================================================
+ * UPDATE STATUS
+ * ===================================================== */
 const updateStatusById = async (req, res) => {
   try {
     const { status } = req.body;
+
     const result = await testResultService.updateStatusById(
       req.params.id,
-      status
+      status,
+      req.user._id,
+      req.user.role
     );
+
     return res.json({
       success: true,
       message: 'Status updated successfully',
@@ -115,60 +164,13 @@ const updateStatusById = async (req, res) => {
   }
 };
 
-// Update status theo testId (admin)
-const updateStatusByTestId = async (req, res) => {
-  try {
-    const { status } = req.body;
-    const outcome = await testResultService.updateStatusByTestId(
-      req.params.testId,
-      status
-    );
-    return res.json({
-      success: true,
-      message: 'Statuses updated successfully',
-      modifiedCount: outcome.modifiedCount,
-    });
-  } catch (error) {
-    return handleServiceError(error, res);
-  }
-};
-
-// Lấy results của tôi
-const getMyTestResults = async (req, res) => {
-  try {
-    const results = await testResultService.getTestResultsByUser(req.user._id);
-    return res.json({
-      success: true,
-      message: 'My test results fetched successfully',
-      results,
-    });
-  } catch (error) {
-    return handleServiceError(error, res);
-  }
-};
-
-// Lấy results theo test (admin thấy all; user chỉ thấy của mình)
-const getTestResultsByTest = async (req, res) => {
-  try {
-    const results = await testResultService.getTestResultsByTest(
-      req.params.testId,
-      req.user._id,
-      req.user.role
-    );
-    return res.json({
-      success: true,
-      message: 'Test results by test fetched successfully',
-      results,
-    });
-  } catch (error) {
-    return handleServiceError(error, res);
-  }
-};
-
-// Thống kê của tôi
+/* =====================================================
+ * USER STATISTICS
+ * ===================================================== */
 const getMyStatistics = async (req, res) => {
   try {
     const statistics = await testResultService.getUserStatistics(req.user._id);
+
     return res.json({
       success: true,
       message: 'My statistics fetched successfully',
@@ -179,12 +181,10 @@ const getMyStatistics = async (req, res) => {
   }
 };
 
-// Thống kê theo userId (admin)
 const getUserStatistics = async (req, res) => {
   try {
-    const statistics = await testResultService.getUserStatistics(
-      req.params.userId
-    );
+    const statistics = await testResultService.getUserStatistics(req.params.userId);
+
     return res.json({
       success: true,
       message: 'User statistics fetched successfully',
@@ -195,7 +195,9 @@ const getUserStatistics = async (req, res) => {
   }
 };
 
-// Soft delete (admin/owner)
+/* =====================================================
+ * DELETE / RESTORE
+ * ===================================================== */
 const softDeleteTestResult = async (req, res) => {
   try {
     const result = await testResultService.softDeleteTestResult(
@@ -203,6 +205,7 @@ const softDeleteTestResult = async (req, res) => {
       req.user._id,
       req.user.role
     );
+
     return res.json({
       success: true,
       message: 'Test result deleted successfully',
@@ -213,10 +216,10 @@ const softDeleteTestResult = async (req, res) => {
   }
 };
 
-// Hard delete (admin)
 const hardDeleteTestResult = async (req, res) => {
   try {
     const result = await testResultService.hardDeleteTestResult(req.params.id);
+
     return res.json({
       success: true,
       message: 'Test result permanently deleted',
@@ -227,10 +230,10 @@ const hardDeleteTestResult = async (req, res) => {
   }
 };
 
-// Restore (admin)
 const restoreTestResult = async (req, res) => {
   try {
     const result = await testResultService.restoreTestResult(req.params.id);
+
     return res.json({
       success: true,
       message: 'Test result restored successfully',
@@ -241,15 +244,16 @@ const restoreTestResult = async (req, res) => {
   }
 };
 
+/* =====================================================
+ * EXPORT
+ * ===================================================== */
 module.exports = {
   createTestResult,
   getAllTestResults,
+  getMyTestResults,
   getTestResultById,
   updateTestResult,
   updateStatusById,
-  updateStatusByTestId,
-  getMyTestResults,
-  getTestResultsByTest,
   getMyStatistics,
   getUserStatistics,
   softDeleteTestResult,
