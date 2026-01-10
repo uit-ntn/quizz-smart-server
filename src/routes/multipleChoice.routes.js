@@ -20,6 +20,7 @@ router.get('/:id', optionalAuthMiddleware, multipleChoiceController.getMultipleC
 // ===== Protected =====
 router.post('/', authMiddleware, multipleChoiceController.createMultipleChoice);
 router.put('/:id', authMiddleware, multipleChoiceController.updateMultipleChoice);
+router.patch('/:id/move', authMiddleware, multipleChoiceController.moveMultipleChoice);
 router.delete('/:id', authMiddleware, multipleChoiceController.deleteMultipleChoice);
 
 module.exports = router;

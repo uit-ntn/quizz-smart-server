@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Grammar = require('../models/Grammar');
+const Test = require('../models/Test');
 
 // Custom error class for service errors
 class ServiceError extends Error {
@@ -10,6 +11,45 @@ class ServiceError extends Error {
     this.name = 'ServiceError';
   }
 }
+
+/**
+ * ✅ Security: Check quyền xem TEST (ngăn leak câu hỏi test private)
+ * - Admin: xem tất cả
+ * - Guest: chỉ public + active
+ * - User: public hoặc test của mình
+ */
+const ensureCanAccessTest = async (testId, userId = null, userRole = null) => {
+  // Validate ObjectId
+  if (!mongoose.Types.ObjectId.isValid(testId)) {
+    throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
+  }
+
+  const test = await Test.findById(testId).select('visibility status created_by');
+  if (!test) {
+    throw new ServiceError('Test not found', 404, 'NOT_FOUND');
+  }
+
+  // Admin sees all
+  if (userRole === 'admin') return test;
+
+  // Guest: only public + active
+  if (!userId) {
+    if (test.visibility !== 'public' || test.status !== 'active') {
+      throw new ServiceError('Access denied', 403, 'ACCESS_DENIED');
+    }
+    return test;
+  }
+
+  // Logged in: public OR own test
+  if (
+    test.visibility === 'public' ||
+    test.created_by?.toString() === userId.toString()
+  ) {
+    return test;
+  }
+
+  throw new ServiceError('Access denied', 403, 'ACCESS_DENIED');
+};
 
 // Create
 const createGrammar = async (grammarData) => {
@@ -70,6 +110,8 @@ const getAllGrammars = async (filters = {}, userId = null, userRole = null) => {
       if (!mongoose.Types.ObjectId.isValid(filters.test_id)) {
         throw new ServiceError('Invalid test ID in filters', 400, 'VALIDATION_ERROR');
       }
+      // ✅ NEW: check quyền access test
+      await ensureCanAccessTest(filters.test_id, userId, userRole);
       query.test_id = filters.test_id;
     }
     if (filters.difficulty) query.difficulty = filters.difficulty;
@@ -115,6 +157,11 @@ const getGrammarById = async (id, userId = null, userRole = null) => {
 
     if (!grammar) throw new ServiceError('Grammar not found', 404, 'NOT_FOUND');
 
+    // ✅ NEW: check quyền access test của câu hỏi
+    if (grammar.test_id) {
+      await ensureCanAccessTest(grammar.test_id, userId, userRole);
+    }
+
     // Non-admin cannot see archived
     if (userRole !== 'admin' && grammar.status === 'archived') {
       throw new ServiceError('Grammar not found or access denied', 404, 'NOT_FOUND');
@@ -136,6 +183,9 @@ const getAllGrammarsByTestId = async (testId, userId = null, userRole = null) =>
     if (!mongoose.Types.ObjectId.isValid(testId)) {
       throw new ServiceError('Invalid test ID format', 400, 'VALIDATION_ERROR');
     }
+
+    // ✅ NEW: check quyền access test
+    await ensureCanAccessTest(testId, userId, userRole);
 
     const query = {
       test_id: new mongoose.Types.ObjectId(testId),

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const TestResult = require('../models/TestResult');
 const Test = require('../models/Test');
+const Topic = require('../models/Topic');
 
 /* =====================================================
  * ERROR
@@ -57,7 +58,6 @@ const validateAnswers = (answers) => {
   }
 
   for (const a of answers) {
-    if (!a?.question_id) throw new ServiceError('answer.question_id is required');
     if (!a?.question_collection) throw new ServiceError('answer.question_collection is required');
     if (typeof a.is_correct !== 'boolean')
       throw new ServiceError('answer.is_correct must be boolean');
@@ -77,10 +77,16 @@ const validateAnswers = (answers) => {
           throw new ServiceError('MCQ.options.text is required');
       }
 
+      // Support both Array (legacy) and Map (new) formats for correct_answers
+      const correctAnswersArray = Array.isArray(a.correct_answers) 
+        ? a.correct_answers
+        : (typeof a.correct_answers === 'object' && a.correct_answers)
+        ? Object.keys(a.correct_answers)
+        : [];
+
       if (
-        !Array.isArray(a.correct_answers) ||
-        a.correct_answers.length === 0 ||
-        !a.correct_answers.every((x) => MC_LABELS.includes(x))
+        correctAnswersArray.length === 0 ||
+        !correctAnswersArray.every((x) => MC_LABELS.includes(x))
       ) {
         throw new ServiceError('MCQ.correct_answers invalid');
       }
@@ -146,14 +152,23 @@ const assertView = (doc, requesterId, role) => {
 const buildSnapshotFromTest = async (testId) => {
   ensureObjectId(testId, 'test_id');
 
-  const t = await Test.findById(testId).lean();
+  const t = await Test.findById(testId).populate('topic_id', 'name sub_topics').lean();
   if (!t) throw new ServiceError('Test not found', 404, 'NOT_FOUND');
 
+  // Find subtopic name if subtopic_id exists
+  let subTopicName = t.sub_topic || '';
+  if (t.subtopic_id && t.topic_id?.sub_topics) {
+    const subtopic = t.topic_id.sub_topics.find(st => 
+      String(st._id) === String(t.subtopic_id)
+    );
+    subTopicName = subtopic?.name || subTopicName;
+  }
+
   return {
-    test_id: t._id,
+    test_id: testId,
     test_title: t.test_title,
-    main_topic: t.main_topic,
-    sub_topic: t.sub_topic || '',
+    main_topic: t.topic_id?.name || t.main_topic || '',
+    sub_topic: subTopicName,
     test_type: t.test_type,
     difficulty: t.difficulty || 'medium',
   };
@@ -205,7 +220,6 @@ const createTestResult = async (payload, requesterRole = null) => {
 
     answers,
     status: finalStatus,
-    deleted_at: null,
   });
 };
 
@@ -214,11 +228,6 @@ const createTestResult = async (payload, requesterRole = null) => {
  * ===================================================== */
 const getAllTestResults = async (filters = {}, requesterId, role) => {
   const q = {};
-
-  if (filters.test_id) {
-    ensureObjectId(filters.test_id, 'test_id');
-    q.test_id = filters.test_id;
-  }
 
   if (filters.user_id) {
     ensureObjectId(filters.user_id, 'user_id');
@@ -253,11 +262,6 @@ const getMyTestResults = async (userId, filters = {}) => {
     ]
   };
 
-  if (filters.test_id) {
-    ensureObjectId(filters.test_id, 'test_id');
-    q.test_id = filters.test_id;
-  }
-
   return TestResult.find(q).sort({ created_at: -1 }).lean();
 };
 
@@ -272,7 +276,6 @@ const updateTestResult = async (id, payload, requesterId, role) => {
   assertView(doc, requesterId, role);
 
   const blocked = new Set([
-    'test_id',
     'test_snapshot',
     'user_id',
     'answers',
@@ -281,17 +284,23 @@ const updateTestResult = async (id, payload, requesterId, role) => {
     'percentage',
     'duration_ms',
     'status',
-    'deleted_at',
     'created_at',
     'updated_at',
   ]);
 
+  const updateFields = {};
   for (const k of Object.keys(payload || {})) {
-    if (!blocked.has(k)) doc[k] = payload[k];
+    if (!blocked.has(k)) updateFields[k] = payload[k];
   }
 
-  await doc.save();
-  return doc;
+  // Use findByIdAndUpdate to avoid validation issues with old data
+  const updatedDoc = await TestResult.findByIdAndUpdate(
+    id,
+    updateFields,
+    { new: true, runValidators: false }
+  );
+  
+  return updatedDoc;
 };
 
 /* =====================================================
@@ -315,10 +324,14 @@ const updateStatusById = async (id, status, requesterId, role) => {
     }
   }
 
-  doc.status = nextStatus;
-  doc.deleted_at = nextStatus === 'deleted' ? new Date() : null;
-  await doc.save();
-  return doc;
+  // Use findByIdAndUpdate to avoid validation issues with old data
+  const updatedDoc = await TestResult.findByIdAndUpdate(
+    id,
+    { status: nextStatus },
+    { new: true, runValidators: false }
+  );
+  
+  return updatedDoc;
 };
 
 /* =====================================================
@@ -330,10 +343,15 @@ const softDeleteTestResult = async (id, requesterId, role) => {
   if (!doc) throw new ServiceError('Not found', 404);
 
   assertView(doc, requesterId, role);
-  doc.status = 'deleted';
-  doc.deleted_at = new Date();
-  await doc.save();
-  return doc;
+  
+  // Use findByIdAndUpdate to avoid validation issues with old data
+  const updatedDoc = await TestResult.findByIdAndUpdate(
+    id,
+    { status: 'deleted' },
+    { new: true, runValidators: false }
+  );
+  
+  return updatedDoc;
 };
 
 const hardDeleteTestResult = async (id) => {
@@ -348,10 +366,14 @@ const restoreTestResult = async (id) => {
   const doc = await TestResult.findById(id);
   if (!doc) throw new ServiceError('Not found', 404);
 
-  doc.status = 'active';
-  doc.deleted_at = null;
-  await doc.save();
-  return doc;
+  // Use findByIdAndUpdate to avoid validation issues with old data
+  const updatedDoc = await TestResult.findByIdAndUpdate(
+    id,
+    { status: 'active' },
+    { new: true, runValidators: false }
+  );
+  
+  return updatedDoc;
 };
 
 /* =====================================================
@@ -414,7 +436,6 @@ const getUserStatistics = async (userId) => {
     .slice(0, 10)
     .map((r) => ({
       _id: r._id,
-      test_id: r.test_id,
       test_title: r.test_snapshot?.test_title,
       test_type: r.test_snapshot?.test_type,
       percentage: r.percentage,
@@ -437,6 +458,130 @@ const getUserStatistics = async (userId) => {
 };
 
 /* =====================================================
+ * LEADERBOARD - TOP USERS BY TIME PERIOD
+ * ===================================================== */
+const getTopUsersByWeek = async (limit = 3) => {
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+  return await getTopUsersInPeriod(oneWeekAgo, new Date(), limit);
+};
+
+const getTopUsersByMonth = async (limit = 3) => {
+  const oneMonthAgo = new Date();
+  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+  return await getTopUsersInPeriod(oneMonthAgo, new Date(), limit);
+};
+
+const getTopUsersInPeriod = async (startDate, endDate, limit = 3) => {
+  try {
+    const pipeline = [
+      // Lọc test results trong khoảng thời gian và status active
+      {
+        $match: {
+          status: 'active',
+          created_at: {
+            $gte: startDate,
+            $lte: endDate
+          },
+          // Loại bỏ các test có vẻ là draft/bỏ dở
+          $or: [
+            { percentage: { $gt: 0 } },
+            { duration_ms: { $gte: 10000 } }
+          ]
+        }
+      },
+      // Group theo user_id và tính toán điểm số
+      {
+        $group: {
+          _id: '$user_id',
+          total_tests: { $sum: 1 },
+          total_questions: { $sum: '$total_questions' },
+          total_correct: { $sum: '$correct_count' },
+          average_percentage: { $avg: '$percentage' },
+          best_percentage: { $max: '$percentage' },
+          total_duration_ms: { $sum: '$duration_ms' },
+          // Tính điểm tổng hợp: trung bình % * số câu đúng * hệ số số bài test
+          composite_score: {
+            $sum: {
+              $multiply: [
+                '$percentage',
+                '$correct_count',
+                { $add: [1, { $multiply: [0.1, 1] }] } // Bonus nhỏ cho mỗi bài test
+              ]
+            }
+          }
+        }
+      },
+      // Lookup thông tin user
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'user_info'
+        }
+      },
+      // Unwind user info
+      {
+        $unwind: '$user_info'
+      },
+      // Project fields cần thiết
+      {
+        $project: {
+          _id: 1,
+          user_id: '$_id',
+          full_name: '$user_info.full_name',
+          email: '$user_info.email',
+          avatar_url: '$user_info.avatar_url',
+          total_tests: 1,
+          total_questions: 1,
+          total_correct: 1,
+          average_percentage: { $round: ['$average_percentage', 1] },
+          best_percentage: 1,
+          total_duration_ms: 1,
+          composite_score: { $round: ['$composite_score', 2] },
+          // Tính accuracy rate
+          accuracy_rate: {
+            $round: [
+              {
+                $cond: [
+                  { $gt: ['$total_questions', 0] },
+                  { $multiply: [{ $divide: ['$total_correct', '$total_questions'] }, 100] },
+                  0
+                ]
+              },
+              1
+            ]
+          }
+        }
+      },
+      // Sắp xếp theo composite_score giảm dần
+      {
+        $sort: { composite_score: -1 }
+      },
+      // Giới hạn số lượng kết quả
+      {
+        $limit: limit
+      }
+    ];
+
+    const results = await TestResult.aggregate(pipeline);
+    
+    // Thêm ranking
+    return results.map((user, index) => ({
+      ...user,
+      rank: index + 1
+    }));
+
+  } catch (error) {
+    console.error('❌ Error in getTopUsersInPeriod:', error);
+    throw new ServiceError('Failed to fetch leaderboard data', 500, 'INTERNAL_ERROR');
+  }
+};
+
+/* =====================================================
  * EXPORT
  * ===================================================== */
 module.exports = {
@@ -451,4 +596,151 @@ module.exports = {
   hardDeleteTestResult,
   restoreTestResult,
   getUserStatistics,
+  getTopUsersByWeek,
+  getTopUsersByMonth,
+  getTopUsersInPeriod,
+
+  // Get top performers (highest average scores)
+  getTopPerformers: async (limit = 5) => {
+    try {
+      const pipeline = [
+        {
+          $match: {
+            status: 'active',
+            // Chỉ tính những test có ít nhất 3 câu hỏi
+            total_questions: { $gte: 3 }
+          }
+        },
+        {
+          $group: {
+            _id: '$user_id',
+            total_tests: { $sum: 1 },
+            total_questions: { $sum: '$total_questions' },
+            total_correct: { $sum: '$correct_count' },
+            average_percentage: { $avg: '$percentage' },
+            best_percentage: { $max: '$percentage' },
+            total_duration_ms: { $sum: '$duration_ms' }
+          }
+        },
+        // Chỉ lấy users đã làm ít nhất 3 bài test
+        {
+          $match: {
+            total_tests: { $gte: 3 }
+          }
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'user_info'
+          }
+        },
+        {
+          $unwind: '$user_info'
+        },
+        {
+          $project: {
+            _id: 0,
+            user_id: '$_id',
+            full_name: '$user_info.full_name',
+            email: '$user_info.email',
+            avatar_url: '$user_info.avatar_url',
+            total_tests: 1,
+            total_questions: 1,
+            total_correct: 1,
+            average_percentage: { $round: ['$average_percentage', 1] },
+            best_percentage: 1,
+            consistency_score: {
+              // Điểm nhất quán = avg_percentage * (1 - độ lệch chuẩn/100)
+              $round: ['$average_percentage', 1]
+            }
+          }
+        },
+        {
+          $sort: { average_percentage: -1 }
+        },
+        {
+          $limit: limit
+        }
+      ];
+
+      const results = await TestResult.aggregate(pipeline);
+      
+      return results.map((user, index) => ({
+        ...user,
+        rank: index + 1
+      }));
+
+    } catch (error) {
+      console.error('❌ Error in getTopPerformers:', error);
+      throw new ServiceError('Failed to fetch top performers', 500, 'INTERNAL_ERROR');
+    }
+  },
+
+  // Get top users who completed the most tests (by number of test results)
+  getTopTestTakers: async (limit = 5) => {
+    try {
+      const User = require('../models/User');
+      
+      const pipeline = [
+        {
+          $match: {
+            status: 'active'
+          }
+        },
+        {
+          $group: {
+            _id: '$user_id',
+            total_completed: { $sum: 1 },
+            total_questions: { $sum: '$total_questions' },
+            total_correct: { $sum: '$correct_count' },
+            average_percentage: { $avg: '$percentage' }
+          }
+        },
+        {
+          $sort: { total_completed: -1 }
+        },
+        {
+          $limit: limit
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'user_info'
+          }
+        },
+        {
+          $unwind: '$user_info'
+        },
+        {
+          $project: {
+            _id: 0,
+            user_id: '$_id',
+            full_name: '$user_info.full_name',
+            email: '$user_info.email',
+            avatar_url: '$user_info.avatar_url',
+            created_at: '$user_info.created_at',
+            total_completed: 1,
+            total_questions: 1,
+            total_correct: 1,
+            average_percentage: { $round: ['$average_percentage', 1] }
+          }
+        }
+      ];
+      
+      const results = await TestResult.aggregate(pipeline);
+      
+      // Add ranking
+      return results.map((user, index) => ({
+        ...user,
+        rank: index + 1
+      }));
+    } catch (error) {
+      console.error('❌ Error in getTopTestTakers:', error);
+      throw new ServiceError('Failed to fetch top test takers', 500, 'INTERNAL_ERROR');
+    }
+  },
 };

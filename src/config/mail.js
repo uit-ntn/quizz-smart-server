@@ -5,13 +5,19 @@ const mailConfig = {
     service: 'gmail', // You can change to other services like 'outlook', 'yahoo', etc.
     auth: {
         user: process.env.EMAIL_USER, // Your email address
-        pass: process.env.EMAIL_PASSWORD // Your email password or app-specific password
+        pass: process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD // Your email password or app-specific password
     }
+};
+
+// Email sender configuration
+const emailSender = {
+    name: process.env.EMAIL_SENDER_NAME || 'Quiz Smart',
+    email: process.env.EMAIL_USER
 };
 
 // Create and configure transporter
 const createTransporter = () => {
-    return nodemailer.createTransporter(mailConfig);
+    return nodemailer.createTransport(mailConfig);
 };
 
 // Email templates
@@ -127,7 +133,7 @@ const sendMail = async (to, template) => {
         const transporter = createTransporter();
         
         const mailOptions = {
-            from: process.env.EMAIL_USER || 'noreply@quizsmart.com',
+            from: `"${emailSender.name}" <${emailSender.email}>`,
             to: to,
             subject: template.subject,
             html: template.html

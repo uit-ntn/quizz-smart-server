@@ -320,10 +320,22 @@ router.post('/reset-password', authController.resetPasswordWithOTP);
  *         description: Redirects to Google OAuth account picker and consent screen
  */
 router.get('/google', (req, res, next) => {
-    // Store the return URL in session before redirecting to Google
+    // Store the return URL
     const returnUrl = req.query.returnUrl || `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/success`;
-    req.session.returnUrl = returnUrl;
-    console.log('📌 Storing return URL in session:', returnUrl);
+    
+    if (process.env.AWS_LAMBDA_FUNCTION_NAME) {
+        // Lambda: Stateless - store returnUrl in a way that survives redirect
+        // We'll use state parameter that Google OAuth supports
+        console.log('📌 Lambda mode - Will use state parameter for returnUrl:', returnUrl);
+        // Store in req for later use in callback
+        req.returnUrl = returnUrl;
+    } else {
+        // Local: Use session
+        if (req.session) {
+            req.session.returnUrl = returnUrl;
+            console.log('📌 Local mode - Storing return URL in session:', returnUrl);
+        }
+    }
     next();
 }, passport.authenticate('google', { 
     scope: ['profile', 'email'],

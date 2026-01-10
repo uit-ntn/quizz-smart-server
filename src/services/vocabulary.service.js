@@ -23,14 +23,16 @@ function ensureObjectId(id, name = 'ID') {
   }
 }
 
-// Chỉ cho phép filter “an toàn” (tránh FE truyền difficulty/status làm query rỗng)
+// Chỉ cho phép filter "an toàn" (tránh FE truyền difficulty/status làm query rỗng)
 function sanitizeFilters(filters = {}) {
   const safe = {};
-  const { test_id, word, meaning } = filters;
+  const { test_id, word, meaning, part_of_speech, cefr_level } = filters;
 
   if (test_id) safe.test_id = String(test_id).trim();
   if (word) safe.word = String(word).trim();
   if (meaning) safe.meaning = String(meaning).trim();
+  if (part_of_speech) safe.part_of_speech = String(part_of_speech).trim();
+  if (cefr_level) safe.cefr_level = String(cefr_level).trim();
 
   return safe;
 }
@@ -125,6 +127,14 @@ const createVocabulary = async (vocabularyData, userId = null, role = null) => {
       throw new ServiceError('Missing required fields: word and meaning are required', 400, 'VALIDATION_ERROR');
     }
 
+    if (!vocabularyData.part_of_speech) {
+      throw new ServiceError('Missing required field: part_of_speech is required', 400, 'VALIDATION_ERROR');
+    }
+
+    if (!vocabularyData.cefr_level) {
+      throw new ServiceError('Missing required field: cefr_level is required', 400, 'VALIDATION_ERROR');
+    }
+
     // Validate test_id if provided
     if (vocabularyData.test_id) {
       ensureObjectId(vocabularyData.test_id, 'test ID');
@@ -139,6 +149,15 @@ const createVocabulary = async (vocabularyData, userId = null, role = null) => {
 
     if (typeof vocabularyData.meaning !== 'string' || vocabularyData.meaning.trim().length === 0) {
       throw new ServiceError('Meaning must be a non-empty string', 400, 'VALIDATION_ERROR');
+    }
+
+    // Validate part_of_speech and cefr_level are strings
+    if (typeof vocabularyData.part_of_speech !== 'string' || vocabularyData.part_of_speech.trim().length === 0) {
+      throw new ServiceError('Part of speech must be a non-empty string', 400, 'VALIDATION_ERROR');
+    }
+
+    if (typeof vocabularyData.cefr_level !== 'string' || vocabularyData.cefr_level.trim().length === 0) {
+      throw new ServiceError('CEFR level must be a non-empty string', 400, 'VALIDATION_ERROR');
     }
 
     const vocabulary = new Vocabulary(vocabularyData);
@@ -276,6 +295,18 @@ const updateVocabulary = async (id, updateData, userId = null, role = null) => {
     if (updateData.meaning !== undefined) {
       if (typeof updateData.meaning !== 'string' || updateData.meaning.trim().length === 0) {
         throw new ServiceError('Meaning must be a non-empty string', 400, 'VALIDATION_ERROR');
+      }
+    }
+
+    if (updateData.part_of_speech !== undefined) {
+      if (typeof updateData.part_of_speech !== 'string' || updateData.part_of_speech.trim().length === 0) {
+        throw new ServiceError('Part of speech must be a non-empty string', 400, 'VALIDATION_ERROR');
+      }
+    }
+
+    if (updateData.cefr_level !== undefined) {
+      if (typeof updateData.cefr_level !== 'string' || updateData.cefr_level.trim().length === 0) {
+        throw new ServiceError('CEFR level must be a non-empty string', 400, 'VALIDATION_ERROR');
       }
     }
 

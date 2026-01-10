@@ -71,18 +71,22 @@ You are an English vocabulary teacher. Generate exactly ${count} English vocabul
   {
     "word": "example",
     "meaning": "ví dụ",
-    "example_sentence": "This is an example of how to use the word in a sentence."
+    "example_sentence": "This is an example of how to use the word in a sentence.",
+    "part_of_speech": "noun",
+    "cefr_level": "A1"
   }
 ]
 
 **Important Instructions:**
 1. Return ONLY valid JSON array format
-2. Each word must have: word, meaning (in Vietnamese), example_sentence (in English)
-3. Example sentences should be natural and demonstrate correct usage
-4. Vietnamese meanings should be accurate and commonly used
-5. Words should be appropriate level for English learners
-6. NO additional text, explanations, or markdown formatting
-7. Ensure JSON is properly formatted and parseable
+2. Each word must have: word, meaning (in Vietnamese), example_sentence (in English), part_of_speech, cefr_level
+3. part_of_speech must be one of: noun, verb, adjective, adverb, pronoun, preposition, conjunction, interjection
+4. cefr_level must be one of: A1, A2, B1, B2, C1, C2
+5. Example sentences should be natural and demonstrate correct usage
+6. Vietnamese meanings should be accurate and commonly used
+7. Words should be appropriate level for English learners
+8. NO additional text, explanations, or markdown formatting
+9. Ensure JSON is properly formatted and parseable
 
 Generate vocabulary for: ${topic} (${category})`;
 
@@ -118,14 +122,16 @@ Generate vocabulary for: ${topic} (${category})`;
 
             // Validate each vocabulary item
             const validatedVocabulary = vocabulary.map((item, index) => {
-                if (!item.word || !item.meaning || !item.example_sentence) {
+                if (!item.word || !item.meaning || !item.example_sentence || !item.part_of_speech || !item.cefr_level) {
                     throw new Error(`Invalid vocabulary item at index ${index}: missing required fields`);
                 }
 
                 return {
                     word: item.word.trim(),
                     meaning: item.meaning.trim(),
-                    example_sentence: item.example_sentence.trim()
+                    example_sentence: item.example_sentence.trim(),
+                    part_of_speech: item.part_of_speech.trim(),
+                    cefr_level: item.cefr_level.trim()
                 };
             });
 
@@ -146,52 +152,72 @@ Generate vocabulary for: ${topic} (${category})`;
             {
                 word: "example",
                 meaning: "ví dụ",
-                example_sentence: "This is an example of how to use the word."
+                example_sentence: "This is an example of how to use the word.",
+                part_of_speech: "noun",
+                cefr_level: "A1"
             },
             {
                 word: "learning",
                 meaning: "học tập",
-                example_sentence: "Learning new vocabulary is important for language development."
+                example_sentence: "Learning new vocabulary is important for language development.",
+                part_of_speech: "noun",
+                cefr_level: "A2"
             },
             {
                 word: "practice",
                 meaning: "thực hành",
-                example_sentence: "You need to practice speaking English every day."
+                example_sentence: "You need to practice speaking English every day.",
+                part_of_speech: "verb",
+                cefr_level: "A1"
             },
             {
                 word: "important",
                 meaning: "quan trọng",
-                example_sentence: "It's important to understand the context of new words."
+                example_sentence: "It's important to understand the context of new words.",
+                part_of_speech: "adjective",
+                cefr_level: "A2"
             },
             {
                 word: "understand",
                 meaning: "hiểu",
-                example_sentence: "I understand the meaning of this vocabulary word."
+                example_sentence: "I understand the meaning of this vocabulary word.",
+                part_of_speech: "verb",
+                cefr_level: "A1"
             },
             {
                 word: "vocabulary",
                 meaning: "từ vựng",
-                example_sentence: "Building vocabulary is essential for language learning."
+                example_sentence: "Building vocabulary is essential for language learning.",
+                part_of_speech: "noun",
+                cefr_level: "A2"
             },
             {
                 word: "language",
                 meaning: "ngôn ngữ",
-                example_sentence: "English is a global language used in many countries."
+                example_sentence: "English is a global language used in many countries.",
+                part_of_speech: "noun",
+                cefr_level: "A1"
             },
             {
                 word: "study",
                 meaning: "học tập, nghiên cứu",
-                example_sentence: "I study English vocabulary every day to improve my skills."
+                example_sentence: "I study English vocabulary every day to improve my skills.",
+                part_of_speech: "verb",
+                cefr_level: "A1"
             },
             {
                 word: "improve",
                 meaning: "cải thiện",
-                example_sentence: "Regular practice will help improve your English skills."
+                example_sentence: "Regular practice will help improve your English skills.",
+                part_of_speech: "verb",
+                cefr_level: "A2"
             },
             {
                 word: "communication",
                 meaning: "giao tiếp",
-                example_sentence: "Good communication skills are valuable in any profession."
+                example_sentence: "Good communication skills are valuable in any profession.",
+                part_of_speech: "noun",
+                cefr_level: "B1"
             }
         ];
 

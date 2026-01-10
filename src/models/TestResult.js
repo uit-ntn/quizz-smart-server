@@ -23,11 +23,6 @@ const optionSnapshotSchema = new mongoose.Schema(
  * ===================================================== */
 const multipleChoiceAnswerSchema = new mongoose.Schema(
   {
-    question_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true,
-    },
-
     question_collection: {
       type: String,
       enum: ['multiple_choices'],
@@ -77,11 +72,6 @@ const multipleChoiceAnswerSchema = new mongoose.Schema(
  * ===================================================== */
 const vocabularyAnswerSchema = new mongoose.Schema(
   {
-    question_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true,
-    },
-
     question_collection: {
       type: String,
       enum: ['vocabularies'],
@@ -134,11 +124,6 @@ const vocabularyAnswerSchema = new mongoose.Schema(
  * ===================================================== */
 const textAnswerSchema = new mongoose.Schema(
   {
-    question_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true,
-    },
-
     question_collection: {
       type: String,
       required: true,
@@ -209,11 +194,33 @@ const testSnapshotSchema = new mongoose.Schema(
 );
 
 /* =====================================================
+ * BEHAVIOR SCHEMA (FE logging)
+ * ===================================================== */
+const behaviorSchema = new mongoose.Schema(
+  {
+    event_type: {
+      type: String,
+      required: true,
+    },
+    at: {
+      type: Date,
+      default: Date.now,
+    },
+    // Flexible payload: question_id, selection, time_spent...
+    payload: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+  },
+  { _id: false }
+);
+
+/* =====================================================
  * MAIN TEST RESULT SCHEMA
  * ===================================================== */
 const testResultSchema = new mongoose.Schema(
   {
-    // giữ để query nhanh + backward compatibility
+    // Direct test_id reference for easier querying
     test_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Test',
@@ -286,11 +293,6 @@ const testResultSchema = new mongoose.Schema(
       default: 'draft',
       index: true,
     },
-
-    deleted_at: {
-      type: Date,
-      default: null,
-    },
   },
   {
     timestamps: {
@@ -304,10 +306,21 @@ const testResultSchema = new mongoose.Schema(
  * INDEXES
  * ===================================================== */
 testResultSchema.index({
-  test_id: 1,
   user_id: 1,
   status: 1,
   created_at: -1,
+});
+
+testResultSchema.index({
+  test_id: 1,
+  status: 1,
+  created_at: -1,
+});
+
+testResultSchema.index({
+  test_id: 1,
+  user_id: 1,
+  status: 1,
 });
 
 /* =====================================================
@@ -315,7 +328,6 @@ testResultSchema.index({
  * ===================================================== */
 testResultSchema.methods.softDelete = async function () {
   this.status = 'deleted';
-  this.deleted_at = new Date();
   await this.save();
 };
 
