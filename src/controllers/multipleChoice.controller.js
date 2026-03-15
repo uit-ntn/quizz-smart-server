@@ -156,6 +156,36 @@ const updateMultipleChoice = async (req, res) => {
   }
 };
 
+// Move question to another test
+const moveMultipleChoice = async (req, res) => {
+  try {
+    const { target_test_id } = req.body || {};
+    if (!target_test_id) {
+      return res.status(400).json({
+        message: 'target_test_id is required',
+        type: 'VALIDATION_ERROR',
+      });
+    }
+
+    const userId = req.user?._id || null;
+    const userRole = req.user?.role || null;
+
+    const result = await multipleChoiceService.moveMultipleChoiceQuestion(
+      req.params.id,
+      target_test_id,
+      userId,
+      userRole
+    );
+
+    return res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    return handleServiceError(error, res);
+  }
+};
+
 // Delete (admin/creator)
 const deleteMultipleChoice = async (req, res) => {
   try {
@@ -216,6 +246,7 @@ module.exports = {
   getAllMultipleChoices,
   getMultipleChoiceById,
   updateMultipleChoice,
+  moveMultipleChoice,
   deleteMultipleChoice,
   getAllMultipleChoicesByTestId,
 };

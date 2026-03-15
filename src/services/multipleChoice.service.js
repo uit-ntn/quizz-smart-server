@@ -74,9 +74,21 @@ const createMultipleChoice = async (questionData) => {
             throw new ServiceError('Options must be an array with at least 2 choices', 400, 'VALIDATION_ERROR');
         }
 
-        // Validate correct_answers is array and not empty
-        if (!Array.isArray(questionData.correct_answers) || questionData.correct_answers.length === 0) {
-            throw new ServiceError('Correct answers must be a non-empty array', 400, 'VALIDATION_ERROR');
+        // Validate correct_answers is Map/Object or Array and not empty
+        if (!questionData.correct_answers || 
+            (typeof questionData.correct_answers !== 'object') ||
+            (Array.isArray(questionData.correct_answers) && questionData.correct_answers.length === 0) ||
+            (!Array.isArray(questionData.correct_answers) && Object.keys(questionData.correct_answers).length === 0)) {
+            throw new ServiceError('Correct answers must be a non-empty object or array', 400, 'VALIDATION_ERROR');
+        }
+        
+        // Convert array to Map if needed for backward compatibility
+        if (Array.isArray(questionData.correct_answers)) {
+            const correctMap = new Map();
+            questionData.correct_answers.forEach(label => {
+                correctMap.set(label, '');
+            });
+            questionData.correct_answers = correctMap;
         }
 
         const question = new MultipleChoice(questionData);
@@ -227,8 +239,65 @@ const updateMultipleChoice = async (id, updateData) => {
         }
 
         if (updateData.correct_answers !== undefined) {
-            if (!Array.isArray(updateData.correct_answers) || updateData.correct_answers.length === 0) {
-                throw new ServiceError('Correct answers must be a non-empty array', 400, 'VALIDATION_ERROR');
+            if (!updateData.correct_answers || 
+                (typeof updateData.correct_answers !== 'object') ||
+                (Array.isArray(updateData.correct_answers) && updateData.correct_answers.length === 0) ||
+                (!Array.isArray(updateData.correct_answers) && Object.keys(updateData.correct_answers).length === 0)) {
+                throw new ServiceError('Correct answers must be a non-empty object or array', 400, 'VALIDATION_ERROR');
+            }
+            
+            // Convert array or plain object to Map for schema compatibility
+            if (Array.isArray(updateData.correct_answers)) {
+                const correctMap = new Map();
+                updateData.correct_answers.forEach(label => {
+                    correctMap.set(label, '');
+                });
+                updateData.correct_answers = correctMap;
+            } else if (!(updateData.correct_answers instanceof Map)) {
+                // Convert plain object to Map
+                const correctMap = new Map();
+                Object.keys(updateData.correct_answers).forEach(key => {
+                    correctMap.set(key, updateData.correct_answers[key] || '');
+                });
+                updateData.correct_answers = correctMap;
+            }
+        }
+
+        // Convert explanation objects to Maps if needed
+        if (updateData.explanation !== undefined && updateData.explanation && typeof updateData.explanation === 'object') {
+            const explanation = { ...updateData.explanation };
+            
+            // explanation.correct is required, so if it's missing, skip updating explanation
+            if (explanation.correct === undefined) {
+                delete updateData.explanation;
+            } else {
+                // Convert explanation.correct to Map if it's not already
+                if (!(explanation.correct instanceof Map)) {
+                    if (typeof explanation.correct === 'object' && explanation.correct !== null) {
+                        const correctMap = new Map();
+                        Object.keys(explanation.correct).forEach(key => {
+                            correctMap.set(key, explanation.correct[key] || '');
+                        });
+                        explanation.correct = correctMap;
+                    } else {
+                        explanation.correct = new Map();
+                    }
+                }
+                
+                // Convert explanation.incorrect_choices to Map if it's not already
+                if (explanation.incorrect_choices !== undefined && !(explanation.incorrect_choices instanceof Map)) {
+                    if (typeof explanation.incorrect_choices === 'object' && explanation.incorrect_choices !== null) {
+                        const incorrectMap = new Map();
+                        Object.keys(explanation.incorrect_choices).forEach(key => {
+                            incorrectMap.set(key, explanation.incorrect_choices[key] || '');
+                        });
+                        explanation.incorrect_choices = incorrectMap;
+                    } else {
+                        explanation.incorrect_choices = new Map();
+                    }
+                }
+                
+                updateData.explanation = explanation;
             }
         }
 
@@ -262,7 +331,100 @@ const updateMultipleChoice = async (id, updateData) => {
             throw new ServiceError('Invalid multiple choice question ID format', 400, 'VALIDATION_ERROR');
         }
 
-        throw new ServiceError('Failed to update multiple choice question', 500, 'DATABASE_ERROR');
+        console.error('❌ Update multiple choice error:', error);
+        console.error('❌ Error details:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+        });
+        throw new ServiceError(`Failed to update multiple choice question: ${error.message}`, 500, 'DATABASE_ERROR');
+    }
+};
+
+// Move question to another multiple_choice test
+const moveMultipleChoiceQuestion = async (questionId, targetTestId, userId = null, userRole = null) => {
+    const session = await mongoose.startSession();
+    try {
+        if (!mongoose.Types.ObjectId.isValid(questionId)) {
+            throw new ServiceError('Invalid multiple choice question ID format', 400, 'VALIDATION_ERROR');
+        }
+        if (!mongoose.Types.ObjectId.isValid(targetTestId)) {
+            throw new ServiceError('Invalid target test ID format', 400, 'VALIDATION_ERROR');
+        }
+
+        session.startTransaction();
+
+        const question = await MultipleChoice.findById(questionId).session(session);
+        if (!question) {
+            throw new ServiceError('Multiple choice question not found', 404, 'NOT_FOUND');
+        }
+
+        const sourceTestId = question.test_id ? question.test_id.toString() : null;
+
+        // Permission: admin or creator of the question
+        if (userRole !== 'admin') {
+            if (!userId || question.created_by?.toString() !== userId.toString()) {
+                throw new ServiceError('Access denied', 403, 'ACCESS_DENIED');
+            }
+        }
+
+        // Validate target test
+        const targetTest = await Test.findById(targetTestId).session(session);
+        if (!targetTest || targetTest.status === 'deleted') {
+            throw new ServiceError('Target test not found', 404, 'NOT_FOUND');
+        }
+        if (targetTest.test_type !== 'multiple_choice') {
+            throw new ServiceError('Target test must be a multiple_choice test', 400, 'VALIDATION_ERROR');
+        }
+        if (userRole !== 'admin' && targetTest.created_by?.toString() !== userId?.toString()) {
+            throw new ServiceError('Access denied', 403, 'ACCESS_DENIED');
+        }
+
+        // Optional: ensure user also owns source test if exists
+        if (sourceTestId && userRole !== 'admin') {
+            const sourceTest = await Test.findById(sourceTestId).session(session);
+            if (sourceTest && sourceTest.created_by?.toString() !== userId?.toString()) {
+                throw new ServiceError('Access denied', 403, 'ACCESS_DENIED');
+            }
+        }
+
+        const now = new Date();
+        question.test_id = targetTest._id;
+        if (userId) question.updated_by = userId;
+        question.updated_at = now;
+        await question.save({ session });
+
+        const targetTotal = await MultipleChoice.countDocuments({ test_id: targetTest._id }).session(session);
+        const targetUpdate = { total_questions: targetTotal, updated_at: now };
+        if (userId) targetUpdate.updated_by = userId;
+        await Test.findByIdAndUpdate(targetTest._id, { $set: targetUpdate }, { session });
+
+        let sourceTotal = null;
+        if (sourceTestId && sourceTestId !== targetTestId) {
+            sourceTotal = await MultipleChoice.countDocuments({ test_id: sourceTestId }).session(session);
+            const sourceUpdate = { total_questions: sourceTotal, updated_at: now };
+            if (userId) sourceUpdate.updated_by = userId;
+            await Test.findByIdAndUpdate(sourceTestId, { $set: sourceUpdate }, { session });
+        }
+
+        await session.commitTransaction();
+
+        return {
+            message: 'Question moved successfully',
+            question,
+            source_test_id: sourceTestId,
+            target_test_id: targetTest._id,
+            target_total_questions: targetTotal,
+            ...(sourceTotal !== null ? { source_total_questions: sourceTotal } : {}),
+        };
+    } catch (error) {
+        await session.abortTransaction();
+        if (error instanceof ServiceError) {
+            throw error;
+        }
+        throw new ServiceError('Failed to move multiple choice question', 500, 'DATABASE_ERROR');
+    } finally {
+        session.endSession();
     }
 };
 
@@ -300,6 +462,7 @@ module.exports = {
     getAllMultipleChoices,
     getMultipleChoiceById,
     updateMultipleChoice,
+    moveMultipleChoiceQuestion,
     deleteMultipleChoice,
     getAllMultipleChoicesByTestId
 };

@@ -14,8 +14,21 @@ const optionSchema = new mongoose.Schema({
 
 const explanationSchema = new mongoose.Schema({
     correct: {
-        type: String,
-        required: true
+        type: Map,
+        of: String,
+        required: true,
+        validate: {
+            validator: function(v) {
+                const validLabels = ['A', 'B', 'C', 'D', 'E'];
+                for (let key of v.keys()) {
+                    if (!validLabels.includes(key)) {
+                        return false;
+                    }
+                }
+                return true;
+            },
+            message: 'Invalid option label in correct. Must be A, B, C, D, or E.'
+        }
     },
     incorrect_choices: {
         type: Map,
@@ -46,11 +59,22 @@ const multipleChoiceSchema = new mongoose.Schema({
         required: true
     },
     options: [optionSchema],
-    correct_answers: [{
-        type: String,
-        required: true,
-        enum: ['A', 'B', 'C', 'D', 'E']
-    }],
+    correct_answers: {
+        type: Map,
+        of: String,
+        validate: {
+            validator: function(v) {
+                const validLabels = ['A', 'B', 'C', 'D', 'E'];
+                for (let key of v.keys()) {
+                    if (!validLabels.includes(key)) {
+                        return false;
+                    }
+                }
+                return true;
+            },
+            message: 'Invalid option label in correct_answers. Must be A, B, C, D, or E.'
+        }
+    },
     explanation: explanationSchema,
     tags: [{
         type: String

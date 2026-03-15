@@ -6,18 +6,17 @@ const { authMiddleware, optionalAuthMiddleware } = require('../middleware/auth.m
 // ===== Public/Optional Auth listing =====
 router.get('/search', optionalAuthMiddleware, testController.searchTests);
 
+router.get('/top-taken', optionalAuthMiddleware, testController.getTopTakenTests);
+router.get('/top-scoring', optionalAuthMiddleware, testController.getTopScoringTests);
+router.get('/newest', optionalAuthMiddleware, testController.getNewestTests);
+
+// Attempt count routes
+router.get('/topic/:mainTopic/attempt-count', optionalAuthMiddleware, testController.getTopicAttemptCount);
+router.get('/:testId/attempt-count', optionalAuthMiddleware, testController.getTestAttemptCount);
+
 router.get('/multiple-choices', optionalAuthMiddleware, testController.getAllMultipleChoicesTests);
 router.get('/grammars', optionalAuthMiddleware, testController.getAllGrammarsTests);
 router.get('/vocabularies', optionalAuthMiddleware, testController.getAllVocabulariesTests);
-
-router.get('/multiple-choices/main-topics', optionalAuthMiddleware, testController.getAllMultipleChoicesMainTopics);
-router.get('/multiple-choices/sub-topics/:mainTopic', optionalAuthMiddleware, testController.getAllMultipleChoicesSubTopicsByMainTopic);
-
-router.get('/grammars/main-topics', optionalAuthMiddleware, testController.getAllGrammarsMainTopics);
-router.get('/grammars/sub-topics/:mainTopic', optionalAuthMiddleware, testController.getAllGrammarsSubTopicsByMainTopic);
-
-router.get('/vocabularies/main-topics', optionalAuthMiddleware, testController.getAllVocabulariesMainTopics);
-router.get('/vocabularies/sub-topics/:mainTopic', optionalAuthMiddleware, testController.getAllVocabulariesSubTopicsByMainTopic);
 
 router.get('/type/:testType', optionalAuthMiddleware, testController.getTestsByType);
 router.get('/topic/:mainTopic/:subTopic', optionalAuthMiddleware, testController.getTestsByTopic);
@@ -31,6 +30,9 @@ router.get('/my-tests', authMiddleware, testController.getMyTests);
 // ===== CRUD =====
 router.post('/', authMiddleware, testController.createTest);
 router.put('/:id', authMiddleware, testController.updateTest);
+
+// Merge tests
+router.post('/merge', authMiddleware, testController.mergeTests);
 
 // Soft delete (đánh dấu deleted)
 router.patch('/:id/soft-delete', authMiddleware, testController.softDeleteTest);

@@ -2,6 +2,45 @@ const userService = require('../services/user.service');
 const testService = require('../services/test.service');
 const testResultService = require('../services/testResult.service');
 
+// Create user (admin only)
+const createUser = async (req, res) => {
+    try {
+        const { email, password, full_name, role, avatar_url, email_verified } = req.body;
+
+        // Validation
+        if (!email || !password || !full_name) {
+            return res.status(400).json({ 
+                message: 'Email, password, and full_name are required' 
+            });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({ 
+                message: 'Password must be at least 6 characters' 
+            });
+        }
+
+        const user = await userService.createUser({
+            email,
+            password,
+            full_name,
+            role: role || 'user',
+            avatar_url,
+            email_verified: email_verified || false
+        });
+
+        res.status(201).json({
+            message: 'User created successfully',
+            user
+        });
+    } catch (error) {
+        if (error.message.includes('already exists')) {
+            return res.status(400).json({ message: error.message });
+        }
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // Get all users (admin only)
 const getAllUsers = async (req, res) => {
     try {
@@ -87,6 +126,23 @@ const updatePassword = async (req, res) => {
     }
 };
 
+// Admin update user password (no old password required)
+const adminUpdatePassword = async (req, res) => {
+    try {
+        const { newPassword } = req.body;
+        if (!newPassword || newPassword.length < 6) {
+            return res.status(400).json({ 
+                message: 'New password is required and must be at least 6 characters' 
+            });
+        }
+        
+        const result = await userService.adminUpdatePassword(req.params.id, newPassword);
+        res.json(result);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
 // Soft delete user
 const softDeleteUser = async (req, res) => {
     try {
@@ -100,31 +156,33 @@ const softDeleteUser = async (req, res) => {
     }
 };
 
-// Hard delete user
-const hardDeleteUser = async (req, res) => {
+// Delete user only (không xóa tests - RECOMMENDED)
+const deleteUserOnly = async (req, res) => {
     try {
-        // First get user info before deleting
         const user = await userService.getUserById(req.params.id);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
         
-        // Xoá tất cả các test của user
-        const testsResponse = await testService.getAllTests({ created_by: user._id }, user._id, 'admin');
-        const tests = testsResponse.tests || [];
-        for (const test of tests) {
-            await testService.hardDeleteTest(test._id);
-        }
-        
-        // Xoá tất cả các test result của user  
-        const testResults = await testResultService.getTestResultsByUser(user._id);
-        for (const testResult of testResults) {
-            await testResultService.hardDeleteTestResult(testResult._id);
-        }
-        
-        // Xoá user
+        // Chỉ xóa user, GIỮ LẠI tất cả tests và test results
         await userService.hardDeleteUser(req.params.id);
-        res.json({ message: 'User deleted successfully' });
+        res.json({ message: 'User deleted successfully (tests preserved)' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Hard delete user WITHOUT CASCADE (không xóa tests - SAFE)
+const hardDeleteUser = async (req, res) => {
+    try {
+        const user = await userService.getUserById(req.params.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        
+        // CHỈ xóa user, KHÔNG xóa tests và test results
+        await userService.hardDeleteUser(req.params.id);
+        res.json({ message: 'User deleted successfully (tests preserved)' });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -133,7 +191,48 @@ const hardDeleteUser = async (req, res) => {
 // Alias for default delete (uses soft delete)
 const deleteUser = softDeleteUser;
 
+// Get 5 newest users
+const getLatestUsers = async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 5;
+        const users = await userService.getLatestUsers(limit);
+        res.json({
+            success: true,
+            message: 'Latest users fetched successfully',
+            count: users.length,
+            users
+        });
+    } catch (error) {
+        console.error('❌ Error in getLatestUsers:', error);
+        res.status(500).json({ 
+            success: false,
+            message: error.message || 'Internal server error'
+        });
+    }
+};
+
+// Get top contributors
+const getTopContributors = async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 5;
+        const contributors = await userService.getTopContributors(limit);
+        res.json({
+            success: true,
+            message: 'Top contributors fetched successfully',
+            count: contributors.length,
+            contributors
+        });
+    } catch (error) {
+        console.error('❌ Error in getTopContributors:', error);
+        res.status(500).json({ 
+            success: false,
+            message: error.message || 'Internal server error'
+        });
+    }
+};
+
 module.exports = {
+    createUser,
     getAllUsers,
     searchUsers,
     getUserById,
@@ -141,7 +240,28 @@ module.exports = {
     updateUser,
     updateProfile,
     updatePassword,
+    adminUpdatePassword,
     deleteUser,        // Default delete (soft delete)
     softDeleteUser,
     hardDeleteUser,
+    getLatestUsers,
+    getTopContributors,
+
+    // Get system overview statistics
+    getSystemOverview: async (req, res) => {
+        try {
+            const stats = await userService.getSystemOverview();
+            res.json({
+                success: true,
+                message: 'System overview fetched successfully',
+                stats
+            });
+        } catch (error) {
+            console.error('❌ Error in getSystemOverview:', error);
+            res.status(500).json({ 
+                success: false,
+                message: error.message || 'Internal server error'
+            });
+        }
+    },
 };

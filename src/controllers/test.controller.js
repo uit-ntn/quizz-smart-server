@@ -123,6 +123,36 @@ const updateTest = async (req, res) => {
   }
 };
 
+const mergeTests = async (req, res) => {
+  try {
+    const { targetTestId, sourceTestIds } = req.body || {};
+
+    if (!targetTestId || !Array.isArray(sourceTestIds) || sourceTestIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'targetTestId and at least one sourceTestIds item are required',
+        type: 'VALIDATION_ERROR',
+      });
+    }
+
+    const { userId, userRole } = getUserCtx(req);
+    const result = await testService.mergeTests({
+      targetTestId,
+      sourceTestIds,
+      userId,
+      userRole,
+      updatedBy: req.user?._id || null,
+    });
+
+    return res.json({
+      success: true,
+      ...result,
+    });
+  } catch (e) {
+    return handleServiceError(e, res);
+  }
+};
+
 const softDeleteTest = async (req, res) => {
   try {
     const existing = await ensureAdminOrOwner(req, res, req.params.id);
@@ -273,102 +303,50 @@ const getAllVocabulariesTests = async (req, res) => {
    (service đã fix: guest/user thấy toàn bộ topics, không lọc visibility)
 ========================= */
 
-const getAllMultipleChoicesMainTopics = async (req, res) => {
-  try {
-    const { userId, userRole } = getUserCtx(req);
-    const mainTopics = await testService.getAllMultipleChoicesMainTopics(userId, userRole);
 
+// Get top taken tests
+const getTopTakenTests = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 5;
+    const { main_topic, sub_topic } = req.query;
+    
+    const filters = {};
+    if (main_topic) filters.main_topic = main_topic;
+    if (sub_topic) filters.sub_topic = sub_topic;
+    
+    const tests = await testService.getTopTakenTests(filters, limit);
+    
     return res.json({
       success: true,
-      message: 'Get all multiple choices main topics successfully',
-      mainTopics,
+      message: 'Top taken tests fetched successfully',
+      count: tests.length,
+      filters: filters,
+      tests,
     });
   } catch (e) {
     return handleServiceError(e, res);
   }
 };
 
-const getAllMultipleChoicesSubTopicsByMainTopic = async (req, res) => {
+// Get newest tests
+const getNewestTests = async (req, res) => {
   try {
-    const { userId, userRole } = getUserCtx(req);
-    const subTopics = await testService.getAllMultipleChoicesSubTopicsByMainTopic(
-      req.params.mainTopic,
-      userId,
-      userRole
-    );
-
+    const limit = parseInt(req.query.limit) || 10;
+    const { topic_id, subtopic_id, test_type } = req.query;
+    
+    const filters = {};
+    if (topic_id) filters.topic_id = topic_id;
+    if (subtopic_id) filters.subtopic_id = subtopic_id;
+    if (test_type) filters.test_type = test_type;
+    
+    const tests = await testService.getNewestTests(filters, limit);
+    
     return res.json({
       success: true,
-      message: 'Get all multiple choices sub topics by main topic successfully',
-      subTopics,
-    });
-  } catch (e) {
-    return handleServiceError(e, res);
-  }
-};
-
-const getAllGrammarsMainTopics = async (req, res) => {
-  try {
-    const { userId, userRole } = getUserCtx(req);
-    const mainTopics = await testService.getAllGrammarsMainTopics(userId, userRole);
-
-    return res.json({
-      success: true,
-      message: 'Get all grammars main topics successfully',
-      mainTopics,
-    });
-  } catch (e) {
-    return handleServiceError(e, res);
-  }
-};
-
-const getAllGrammarsSubTopicsByMainTopic = async (req, res) => {
-  try {
-    const { userId, userRole } = getUserCtx(req);
-    const subTopics = await testService.getAllGrammarsSubTopicsByMainTopic(
-      req.params.mainTopic,
-      userId,
-      userRole
-    );
-
-    return res.json({
-      success: true,
-      message: 'Get all grammars sub topics by main topic successfully',
-      subTopics,
-    });
-  } catch (e) {
-    return handleServiceError(e, res);
-  }
-};
-
-const getAllVocabulariesMainTopics = async (req, res) => {
-  try {
-    const { userId, userRole } = getUserCtx(req);
-    const mainTopics = await testService.getAllVocabulariesMainTopics(userId, userRole);
-
-    return res.json({
-      success: true,
-      message: 'Get all vocabularies main topics successfully',
-      mainTopics,
-    });
-  } catch (e) {
-    return handleServiceError(e, res);
-  }
-};
-
-const getAllVocabulariesSubTopicsByMainTopic = async (req, res) => {
-  try {
-    const { userId, userRole } = getUserCtx(req);
-    const subTopics = await testService.getAllVocabulariesSubTopicsByMainTopic(
-      req.params.mainTopic,
-      userId,
-      userRole
-    );
-
-    return res.json({
-      success: true,
-      message: 'Get all vocabularies sub topics by main topic successfully',
-      subTopics,
+      message: 'Newest tests fetched successfully',
+      count: tests.length,
+      filters: filters,
+      tests,
     });
   } catch (e) {
     return handleServiceError(e, res);
@@ -382,6 +360,7 @@ module.exports = {
 
   getTestById,
   updateTest,
+  mergeTests,
   softDeleteTest,
   hardDeleteTest,
 
@@ -393,12 +372,68 @@ module.exports = {
   getAllGrammarsTests,
   getAllVocabulariesTests,
 
-  getAllMultipleChoicesMainTopics,
-  getAllMultipleChoicesSubTopicsByMainTopic,
+  getTopTakenTests,
+  getNewestTests,
 
-  getAllGrammarsMainTopics,
-  getAllGrammarsSubTopicsByMainTopic,
+  // Get top scoring tests
+  getTopScoringTests: async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit) || 5;
+      const { main_topic, sub_topic, test_type } = req.query;
+      
+      const filters = {};
+      if (main_topic) filters.main_topic = main_topic;
+      if (sub_topic) filters.sub_topic = sub_topic;
+      if (test_type) filters.test_type = test_type;
+      
+      const tests = await testService.getTopScoringTests(filters, limit);
+      
+      return res.json({
+        success: true,
+        message: 'Top scoring tests fetched successfully',
+        count: tests.length,
+        filters: filters,
+        tests,
+      });
+    } catch (e) {
+      return handleServiceError(e, res);
+    }
+  },
 
-  getAllVocabulariesMainTopics,
-  getAllVocabulariesSubTopicsByMainTopic,
+  // Get test attempt count
+  getTestAttemptCount: async (req, res) => {
+    try {
+      const { testId } = req.params;
+      const count = await testService.getTestAttemptCount(testId);
+      
+      res.json({
+        success: true,
+        message: `Attempt count for test ${testId} fetched successfully`,
+        test_id: testId,
+        attempt_count: count
+      });
+    } catch (e) {
+      return handleServiceError(e, res);
+    }
+  },
+
+  // Get topic attempt count
+  getTopicAttemptCount: async (req, res) => {
+    try {
+      const { mainTopic } = req.params;
+      const { test_type } = req.query;
+      
+      const count = await testService.getTopicAttemptCount(mainTopic, test_type);
+      
+      res.json({
+        success: true,
+        message: `Attempt count for topic ${mainTopic} fetched successfully`,
+        main_topic: mainTopic,
+        test_type: test_type || 'all',
+        attempt_count: count
+      });
+    } catch (e) {
+      return handleServiceError(e, res);
+    }
+  },
 };

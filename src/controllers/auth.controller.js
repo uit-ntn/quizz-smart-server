@@ -63,8 +63,23 @@ const googleAuthSuccess = async (req, res) => {
         console.log('✅ JWT Token generated successfully for user:', req.user.email);
         console.log('🔑 Token (first 20 chars):', token.substring(0, 20) + '...');
 
-        // Get the return URL from session (the page user was on before logging in)
-        const returnUrl = req.session.returnUrl || `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/success`;
+        // Get the return URL - support both Lambda (stateless) and local (session)
+        let returnUrl;
+        
+        if (process.env.AWS_LAMBDA_FUNCTION_NAME) {
+            // Lambda: Stateless - always redirect to frontend success page
+            // Frontend can handle redirecting to previous page using localStorage or query params
+            returnUrl = `${process.env.FRONTEND_URL || 'https://quiz-smart.nhandev.org'}/auth/success`;
+            console.log('📌 Lambda mode - Using frontend success URL:', returnUrl);
+        } else {
+            // Local: Get from session
+            returnUrl = req.session?.returnUrl || `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/success`;
+            // Clear the returnUrl from session
+            if (req.session) {
+                delete req.session.returnUrl;
+            }
+            console.log('📌 Local mode - Using returnUrl from session:', returnUrl);
+        }
         
         // Construct the redirect URL with token
         // Check if returnUrl already has query parameters
@@ -72,9 +87,6 @@ const googleAuthSuccess = async (req, res) => {
         const redirectURL = `${returnUrl}${separator}token=${token}`;
 
         console.log('↗️ Redirecting to return URL:', redirectURL);
-        
-        // Clear the returnUrl from session
-        delete req.session.returnUrl;
 
         // Redirect to the original page with token
         res.redirect(redirectURL);
