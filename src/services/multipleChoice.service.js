@@ -246,13 +246,58 @@ const updateMultipleChoice = async (id, updateData) => {
                 throw new ServiceError('Correct answers must be a non-empty object or array', 400, 'VALIDATION_ERROR');
             }
             
-            // Convert array to Map if needed for backward compatibility
+            // Convert array or plain object to Map for schema compatibility
             if (Array.isArray(updateData.correct_answers)) {
                 const correctMap = new Map();
                 updateData.correct_answers.forEach(label => {
                     correctMap.set(label, '');
                 });
                 updateData.correct_answers = correctMap;
+            } else if (!(updateData.correct_answers instanceof Map)) {
+                // Convert plain object to Map
+                const correctMap = new Map();
+                Object.keys(updateData.correct_answers).forEach(key => {
+                    correctMap.set(key, updateData.correct_answers[key] || '');
+                });
+                updateData.correct_answers = correctMap;
+            }
+        }
+
+        // Convert explanation objects to Maps if needed
+        if (updateData.explanation !== undefined && updateData.explanation && typeof updateData.explanation === 'object') {
+            const explanation = { ...updateData.explanation };
+            
+            // explanation.correct is required, so if it's missing, skip updating explanation
+            if (explanation.correct === undefined) {
+                delete updateData.explanation;
+            } else {
+                // Convert explanation.correct to Map if it's not already
+                if (!(explanation.correct instanceof Map)) {
+                    if (typeof explanation.correct === 'object' && explanation.correct !== null) {
+                        const correctMap = new Map();
+                        Object.keys(explanation.correct).forEach(key => {
+                            correctMap.set(key, explanation.correct[key] || '');
+                        });
+                        explanation.correct = correctMap;
+                    } else {
+                        explanation.correct = new Map();
+                    }
+                }
+                
+                // Convert explanation.incorrect_choices to Map if it's not already
+                if (explanation.incorrect_choices !== undefined && !(explanation.incorrect_choices instanceof Map)) {
+                    if (typeof explanation.incorrect_choices === 'object' && explanation.incorrect_choices !== null) {
+                        const incorrectMap = new Map();
+                        Object.keys(explanation.incorrect_choices).forEach(key => {
+                            incorrectMap.set(key, explanation.incorrect_choices[key] || '');
+                        });
+                        explanation.incorrect_choices = incorrectMap;
+                    } else {
+                        explanation.incorrect_choices = new Map();
+                    }
+                }
+                
+                updateData.explanation = explanation;
             }
         }
 
@@ -286,7 +331,13 @@ const updateMultipleChoice = async (id, updateData) => {
             throw new ServiceError('Invalid multiple choice question ID format', 400, 'VALIDATION_ERROR');
         }
 
-        throw new ServiceError('Failed to update multiple choice question', 500, 'DATABASE_ERROR');
+        console.error('❌ Update multiple choice error:', error);
+        console.error('❌ Error details:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+        });
+        throw new ServiceError(`Failed to update multiple choice question: ${error.message}`, 500, 'DATABASE_ERROR');
     }
 };
 

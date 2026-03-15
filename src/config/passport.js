@@ -57,10 +57,19 @@ passport.use(new GoogleStrategy({
 
         // Create new user
         console.log('👤 Google OAuth - Creating new user:', profile.emails[0].value);
+        
+        // Build full_name as "Họ + Tên" (familyName + givenName) instead of "Tên + Họ"
+        let fullName = profile.displayName; // Fallback to displayName
+        if (profile.name?.familyName || profile.name?.givenName) {
+            const familyName = profile.name.familyName || '';
+            const givenName = profile.name.givenName || '';
+            fullName = [familyName, givenName].filter(Boolean).join(' ').trim() || profile.displayName;
+        }
+        
         user = new User({
             googleId: profile.id,
             email: profile.emails[0].value,
-            full_name: profile.displayName,
+            full_name: fullName,
             authProvider: 'google',
             avatar_url: profile.photos[0]?.value,
             email_verified: true // Google accounts are already verified
