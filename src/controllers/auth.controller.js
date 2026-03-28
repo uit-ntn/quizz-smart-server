@@ -12,7 +12,7 @@ const register = async (req, res) => {
         res.status(400).json({ message: error.message });
     }
 };
-
+ 
 // Login user
 const login = async (req, res) => {
     try {
